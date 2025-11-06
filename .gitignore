@@ -427,4 +427,7 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
+# App
+
 Keypad.Firmware/build/
+*.tfvars

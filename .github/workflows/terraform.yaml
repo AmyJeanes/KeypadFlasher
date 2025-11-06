@@ -1,0 +1,83 @@
+name: Terraform
+
+on:
+  push:
+    branches:
+      - renovate/*
+    paths:
+      - terraform/**
+  workflow_dispatch:
+    inputs:
+      runApply:
+        description: "Terraform run apply"
+        default: false
+        type: boolean
+      image_sha:
+        description: "Docker image SHA to deploy"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      runApply:
+        description: "Terraform run apply"
+        default: false
+        type: boolean
+      image_sha:
+        description: "Docker image SHA to deploy"
+        required: false
+        type: string
+  pull_request:
+    branches:
+      - main
+    paths:
+      - terraform/**
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Azure Login
+        uses: Azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@000eeb8522f0572907c393e8151076c205fdba1b # v1
+
+      - name: Terraform Init
+        run: tofu init -backend-config="storage_account_name=abyssterraform" -backend-config="container_name=terraform" -backend-config="key=keypad.tfstate" -backend-config="access_key=${{ secrets.TERRAFORM_STORAGE_ACCOUNT_KEY }}" -upgrade
+        working-directory: terraform
+        shell: bash
+      
+      - name: Set Terraform variables
+        run: |
+          tee terraform.tfvars <<EOF
+          cloudflare_api_token = "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          cloudflare_zone_id = "${{ vars.CLOUDFLARE_ZONE_ID }}"
+          azure_subscription_id = "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          image_sha = "${{ github.event.inputs.image_sha || inputs.image_sha || '' }}"
+          EOF
+        working-directory: terraform
+
+      - name: Terraform Plan
+        run: tofu plan -lock=false -out tfplan
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Validate and Apply
+        run: tofu apply tfplan
+        working-directory: terraform
+        env:
+          ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        if: github.event.inputs.runApply == 'true' || inputs.runApply

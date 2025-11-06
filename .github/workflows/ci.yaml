@@ -1,0 +1,50 @@
+name: CI
+on:
+  push:
+    branches:
+    - main
+    - renovate/*
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    outputs:
+      image_sha: ${{ steps.push_image.outputs.image_sha }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Build Docker images
+        run: |
+          app="keypad-flasher"
+          echo "Building $app"
+          docker build -t $app -f "Keypad.Flasher.Server/Dockerfile" .
+
+      - name: Push Docker images
+        id: push_image
+        run: |
+          echo $GITHUB_TOKEN | docker login ghcr.io --username AmyJeanes --password-stdin
+          app="keypad-flasher"
+          echo "Pushing $app"
+          docker tag $app ghcr.io/amyjeanes/keypad/$app:latest
+          docker push ghcr.io/amyjeanes/keypad/$app:latest
+
+          # Get the image SHA and set it as output
+          IMAGE_SHA=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/amyjeanes/keypad/$app:latest | cut -d'@' -f2)
+          echo "image_sha=$IMAGE_SHA" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: github.ref == 'refs/heads/main'
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    name: Deploy
+    uses: ./.github/workflows/terraform.yaml
+    with:
+      runApply: true
+      image_sha: ${{ needs.build.outputs.image_sha }}
+    secrets: inherit
