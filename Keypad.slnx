@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Keypad.Flasher.Client/Keypad.Flasher.Client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="Keypad.Flasher.Server/Keypad.Flasher.Server.csproj" Id="ec07647e-61e5-4f36-836e-1f25ebff903b" />
+</Solution>
