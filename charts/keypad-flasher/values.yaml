@@ -1,0 +1,10 @@
+image:
+  repository: ghcr.io/amyjeanes/keypad/keypad-flasher
+  tag: latest
+imagePullSecrets: []
+resources:
+  requests:
+    memory: 50Mi
+    cpu: 10m
+  limits:
+    memory: 50Mi

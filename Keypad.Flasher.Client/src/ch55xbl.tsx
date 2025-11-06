@@ -82,9 +82,32 @@ export default function CH55xBootloaderMinimal() {
     try {
       setStatus("Compiling…");
       const resp = await fetch("flasher");
-      if (!resp.ok) throw new Error(`Compile failed: ${resp.status} ${resp.statusText}`);
-      const json = await resp.json();
-      const base64 = json.fileBytes;
+
+      let body: { error?: string; exitCode?: number; stdout?: string; stderr?: string; fileBytes?: string; } = {};
+      const contentType = resp.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try { body = await resp.json(); } catch { /* ignore parse errors */ }
+      } else if (resp.ok) {
+        // success must be JSON, but fall back if not
+        body = await resp.json().catch(() => null);
+      }
+
+      if (!resp.ok) {
+        if (body && body.error) {
+          const exitCode = body.exitCode != null ? ` (exit ${body.exitCode})` : "";
+          const stdout = body.stdout ? `\n--- stdout ---\n${body.stdout.trim()}` : "";
+          const stderr = body.stderr ? `\n--- stderr ---\n${body.stderr.trim()}` : "";
+          setStatus(`Compile failed${exitCode}: ${body.error}${stdout}${stderr}`);
+          return;
+        }
+        throw new Error(`Compile failed: ${resp.status} ${resp.statusText}`);
+      }
+
+      if (!body || !body.fileBytes) {
+        throw new Error("Unexpected compile response format.");
+      }
+
+      const base64: string = body.fileBytes;
       const text = atob(base64);
       const { data } = parseIntelHexBrowser(text, 63 * 1024);
       await flashBytes(data);
@@ -126,7 +149,7 @@ export default function CH55xBootloaderMinimal() {
         </div>
 
         <div className="space-y-2">
-          <div className="text-sm text-neutral-700"><strong>Status:</strong> {status}</div>
+          <div className="text-sm text-neutral-700"><strong>Status:</strong> {status.split('\n').map((l,i)=><div key={i}>{l}</div>)}</div>
           <div className="text-xs text-neutral-600">{connectedLabel}</div>
           {progress.total > 0 && (
             <div className="w-full bg-neutral-200 rounded-xl h-2 mt-2">

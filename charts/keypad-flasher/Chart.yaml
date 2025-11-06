@@ -1,0 +1,3 @@
+apiVersion: v2
+name: keypad-flasher
+version: 1.0.0

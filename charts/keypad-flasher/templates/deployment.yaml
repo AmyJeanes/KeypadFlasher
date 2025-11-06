@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keypad-flasher
+  labels:
+    app: keypad-flasher
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keypad-flasher
+  template:
+    metadata:
+      labels:
+        app: keypad-flasher
+        {{- if eq .Values.image.tag "latest" }}
+        date: "{{ now | unixEpoch }}"
+        {{- end }}
+    spec:
+      containers:
+      - name: keypad-flasher
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        ports:
+        - containerPort: 8080
+        imagePullPolicy: Always
+        resources: {{ toYaml .Values.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 4
+          failureThreshold: 5
+      imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}

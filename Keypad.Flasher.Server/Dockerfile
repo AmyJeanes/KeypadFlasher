@@ -2,25 +2,30 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+RUN apt-get update
+RUN apt-get install curl -y
+RUN curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin bash
 USER $APP_UID
 WORKDIR /app
+COPY ["Keypad.Firmware/arduino-cli.yaml", "Keypad.Firmware/"]
+RUN arduino-cli core update-index --config-file /app/Keypad.Firmware/arduino-cli.yaml
+RUN arduino-cli core install CH55xDuino:mcs51 --config-file /app/Keypad.Firmware/arduino-cli.yaml
 EXPOSE 8080
 EXPOSE 8081
 
 
 # This stage is used to build the service project
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS with-node
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS with-deps
 RUN apt-get update
-RUN apt-get install curl
+RUN apt-get install curl -y
 RUN curl -sL https://deb.nodesource.com/setup_20.x | bash
 RUN apt-get -y install nodejs
 
-
-FROM with-node AS build
+FROM with-deps AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["Keypad.Flasher.Server/Keypad.Flasher.Server.csproj", "Keypad.Flasher.Server/"]
-COPY ["Keypad.Flasher.Client/Keypad.Flasher.Client.csproj", "Keypad.Flasher.Client/"]
+COPY ["Keypad.Flasher.Client/Keypad.Flasher.Client.esproj", "Keypad.Flasher.Client/"]
 RUN dotnet restore "./Keypad.Flasher.Server/Keypad.Flasher.Server.csproj"
 COPY . .
 WORKDIR "/src/Keypad.Flasher.Server"
@@ -35,4 +40,6 @@ RUN dotnet publish "./Keypad.Flasher.Server.csproj" -c $BUILD_CONFIGURATION -o /
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY ["Keypad.Firmware", "Keypad.Firmware"]
+ENV Settings__FirmwarePath=/app/Keypad.Firmware
 ENTRYPOINT ["dotnet", "Keypad.Flasher.Server.dll"]
