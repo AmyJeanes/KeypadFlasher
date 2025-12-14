@@ -4,9 +4,9 @@ This project contains custom firmware compatible with a number of different CH55
 
 ## Usage
 
-Please see the [development](#development) section for instructions on manually building the project from source.
-
 Don't have a keypad yet? See the [supported devices](#supported-devices) section for some compatible options.
+
+Please see the [development](#development) section for instructions on manually building the project from source.
 
 If you just want to use it, visit https://keypad-flasher.amyjeanes.com for the hosted version of the web app in a WebUSB compatible browser (anything based on Chromium, e.g. Chrome, Edge, Opera)
 
