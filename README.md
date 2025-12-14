@@ -4,7 +4,7 @@ This project contains custom firmware compatible with a number of different CH55
 
 ## Usage
 
-Please see [#development](#development) for instructions on manually building the project from source.
+Please see the [development](#development) section for instructions on manually building the project from source.
 
 Don't have a keypad yet? See the [supported devices](#supported-devices) section for some compatible options.
 
