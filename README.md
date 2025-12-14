@@ -79,7 +79,7 @@ They all have USB-C connectors unless otherwise noted:
 - [4 Keys](https://www.aliexpress.com/item/1005008020501723.html?spm=a2g0o.order_detail.order_detail_item.3.7d51f19cZTzoOY)
 - [6 Keys 1 Knob](https://www.aliexpress.com/item/1005009812219099.html?spm=a2g0o.order_detail.order_detail_item.3.6afff19cXlayc4)
 - [10 Keys](https://www.aliexpress.com/item/1005005509140217.html?spm=a2g0o.order_detail.order_detail_item.7.3c7af19cNrdJJB)
-  - Note: Uses a Micro-USB connector, will need a Micro-USB to USB-C adapter to use the bootloader adapter / contraption above
+  - Note: Uses a Micro-USB connector, will need a Micro-USB to USB-C adapter and USB-C cable to use the bootloader adapter / contraption above
 
 ## Unsupported devices
 
