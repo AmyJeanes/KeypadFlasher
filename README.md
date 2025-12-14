@@ -15,7 +15,7 @@ I am currently building a simple adapter you can plug into the device in between
 In the mean time, you can enter bootloader mode by creating the following contraption manually, many thanks to [@dzid26](https://github.com/dzid26) for helping out with this:
 
 You will need:
-- A USB-C male to female breakout board ideally with headers
+- A USB-C male to female breakout board with headers
   - Some options here, make sure they are male to female:
     - https://www.aliexpress.com/item/1005009136277062.html
     - https://www.amazon.co.uk/Nicear-Type-C-Double-Sided-Connector-Transfer/dp/B0F1Y43GY3
