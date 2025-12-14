@@ -70,26 +70,20 @@ The following is a list of tested and known compatible devices, but other device
 
 They all have USB-C connectors unless otherwise noted:
 
-- https://www.aliexpress.com/item/1005004970126333.html?spm=a2g0o.order_detail.order_detail_item.3.3c7af19cNrdJJB
-
-- https://www.aliexpress.com/item/1005005509140217.html?spm=a2g0o.order_detail.order_detail_item.7.3c7af19cNrdJJB
-  - note: comes with micro-usb port, micro-usb to usb-c adapter required to connect to bootloader adapter
- 
-- https://www.aliexpress.com/item/1005008020501723.html?spm=a2g0o.order_detail.order_detail_item.3.7d51f19cZTzoOY
-
-- https://www.aliexpress.com/item/1005009812219099.html?spm=a2g0o.order_detail.order_detail_item.3.6afff19cXlayc4
-
-- https://www.aliexpress.com/item/1005006627901462.html?spm=a2g0o.order_detail.order_detail_item.3.295bf19c3IDC8m
-
+- [2 Keys](https://www.aliexpress.com/item/1005004970126333.html?spm=a2g0o.order_detail.order_detail_item.3.3c7af19cNrdJJB)
+- [3 Keys 1 Knob](https://www.aliexpress.com/item/1005006627901462.html?spm=a2g0o.order_detail.order_detail_item.3.295bf19c3IDC8m)
+- [4 Keys](https://www.aliexpress.com/item/1005008020501723.html?spm=a2g0o.order_detail.order_detail_item.3.7d51f19cZTzoOY)
+- [6 Keys 1 Knob](https://www.aliexpress.com/item/1005009812219099.html?spm=a2g0o.order_detail.order_detail_item.3.6afff19cXlayc4)
+- [10 Keys](https://www.aliexpress.com/item/1005005509140217.html?spm=a2g0o.order_detail.order_detail_item.7.3c7af19cNrdJJB)
+  - Note: Uses a Micro-USB connector, will need a Micro-USB to USB-C adapter to use the bootloader adapter / contraption above
 
 ## Unsupported devices
 
 These devices have been tested and found to use different types of microcontrollers, and are not compatible with this firmware:
 
-- [12 Keys 2 Knob](https://www.aliexpress.com/item/1005007160113318.html?spm=a2g0o.order_detail.order_detail_item.3.5bd6f19cdqcQwn)
+- [12 Keys 2 Knobs](https://www.aliexpress.com/item/1005007160113318.html?spm=a2g0o.order_detail.order_detail_item.3.5bd6f19cdqcQwn)
   - Uses a CH579M microcontroller
   - Can remap keys using https://github.com/kriomant/ch57x-keyboard-tool or other CH57x programming tools
-
 - [9 Keys](https://www.aliexpress.com/item/1005005307250747.html?spm=a2g0o.order_detail.order_detail_item.5.3c7af19cNrdJJB)
   - Uses a CH32V203 microcontroller
   - Can remap keys using https://sayodevice.com/ web-based flasher (similar to this project!)
