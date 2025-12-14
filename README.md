@@ -12,7 +12,7 @@ You will need to ensure the device is plugged in while in bootloader mode to be 
 
 I am currently building a simple adapter you can plug into the device in between the USB cable and the keypad that will allow you to easily enter bootloader mode without opening the device up. If you would like one of these adapters, please contact me via email (see my GitHub profile). I will update this README when they are available for purchase.
 
-In the mean time, you can enter bootloader mode by creating the following contraption manually, many thanks to @dzid26 for helping out with this:
+In the mean time, you can enter bootloader mode by creating the following contraption manually, many thanks to [@dzid26](https://github.com/dzid26) for helping out with this:
 
 You will need:
 - A USB-C male to female breakout board ideally with headers
