@@ -44,6 +44,8 @@ It should end up look something like this:
 
 Essentially, we are shorting D+ to VCC on both sides of the USB-C breakout board using 10k ohm resistors when the device is powered on, which forces it into bootloader mode.
 
+You could also make a version of this with a USB-A 2.0+ breakout board too which you could use with a USB-A to USB-C cable if you have one of those instead.
+
 To verify whether your device is in HID (default) mode or bootloader mode on Windows, you can run in PowerShell the following snippet:
 
 ```powershell
