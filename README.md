@@ -129,4 +129,12 @@ Run the web app locally:
 dotnet run --project Keypad.Flasher.Server
 ```
 
+or
+
+Build and run docker image:
+```
+docker build -t keypad -f .\Keypad.Flasher.Server\Dockerfile .
+docker run -p 54196:8080 --rm -it -m 256MB keypad
+```
+
 If the browser does not open automatically, open a Chromium-based browser and navigate to `http://localhost:54196`
