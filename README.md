@@ -64,6 +64,8 @@ Now you can hopefully connect to the device in the app and flash the new firmwar
 
 At this time there is only very basic firmware that is designed for keypads with 1 dial and 3 buttons but this will be updated soon to handle different layouts and actually allow remapping of keys etc. The current firmware will just register the 3 buttons as Ctrl-C, Ctrl-V and Ctrl-Z and the dial as scroll up/down.
 
+Please note that the original firmware on the device will be lost when you flash this custom firmware, so only proceed if you are okay with that.
+
 ## Supported devices
 
 The following is a list of tested and known compatible devices, but other devices using the CH55x series microcontrollers may also work.
@@ -109,6 +111,18 @@ Compile device firmware manually:
 cd Keypad.Firmware
 arduino-cli compile --fqbn CH55xDuino:mcs51:ch552:usb_settings=user148,clock=16internal --export-binaries
 ```
+
+You can also configure the Arduino IDE and use that to compile and upload the firmware if you prefer a GUI:
+- Open Arduino IDE
+- Open the `Keypad.Firmware/Keypad.Firmware.ino` project
+- Select the board "CH55xDuino" on Tools > Board
+- Select "P3.6 (D+) Pull up" on Tools -> Bootloader
+- Select "16MHz Internal 3.5V or 5V" on Tools -> Clock
+- Select "USB" on Tools -> Upload method
+- Select "USER CODE w/148B USB RAM" on Tools -> USB Settings
+- Compile the project
+- Connect the device in bootloader mode
+- Upload the firmware (note: original firmware will be lost!)
 
 Run the web app locally:
 ```
