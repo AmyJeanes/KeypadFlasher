@@ -131,13 +131,80 @@ namespace Keypad.Flasher.Server.Controllers
 
         internal static ConfigurationDefinition CreateDefaultConfiguration()
         {
-             var buttons = new List<ButtonBinding>
-            {
-                new ButtonBinding(32, true, 0, true, true, new HidSequenceBinding("1", 0)),
-                new ButtonBinding(14, true, 1, true, true, new HidSequenceBinding("2", 0))
+            var buttons = new List<ButtonBinding>{
+                new ButtonBinding(
+                    Pin: 32,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("0", 0)),
+                new ButtonBinding(
+                    Pin: 14,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("1", 0)),
+                new ButtonBinding(
+                    Pin: 15,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("2", 0)),
+                new ButtonBinding(
+                    Pin: 16,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("3", 0)),
+                new ButtonBinding(
+                    Pin: 17,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("4", 0)),
+                new ButtonBinding(
+                    Pin: 31,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("5", 0)),
+                new ButtonBinding(
+                    Pin: 30,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("6", 0)),
+                new ButtonBinding(
+                    Pin: 11,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("7", 0)),
+                new ButtonBinding(
+                    Pin: 33,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("8", 0)),
+                new ButtonBinding(
+                    Pin: 34,
+                    ActiveLow: true,
+                    LedIndex: -1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("9", 0)),
             };
 
-            return new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
+            return new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: -1);
         }
 
         private bool IsDebugRequested()

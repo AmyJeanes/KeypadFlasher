@@ -225,19 +225,19 @@ namespace Keypad.Flasher.Server.Tests
         {
             var buttons = new List<ButtonBinding>
             {
-                new ButtonBinding(7, true, 0, false, false, new HidSequenceBinding("a", 0)),
-                new ButtonBinding(8, true, 1, false, false, new HidSequenceBinding("b", 0)),
-                new ButtonBinding(9, true, 2, false, false, new HidSequenceBinding("c", 0)),
-                new ButtonBinding(10, true, 3, false, false, new HidSequenceBinding("d", 0)),
-                new ButtonBinding(11, true, 4, false, false, new HidSequenceBinding("e", 0)),
-                new ButtonBinding(12, true, 5, false, false, new HidSequenceBinding("f", 0)),
-                new ButtonBinding(13, true, 6, false, false, new HidSequenceBinding("g", 0)),
-                new ButtonBinding(14, true, 7, false, false, new HidSequenceBinding("h", 0)),
-                new ButtonBinding(15, true, 8, false, false, new HidSequenceBinding("i", 0)),
-                new ButtonBinding(16, true, 9, false, false, new HidSequenceBinding("j", 0))
+                new ButtonBinding(32, true, -1, true, true, new HidSequenceBinding("0", 0)),
+                new ButtonBinding(14, true, -1, true, true, new HidSequenceBinding("1", 0)),
+                new ButtonBinding(15, true, -1, true, true, new HidSequenceBinding("2", 0)),
+                new ButtonBinding(16, true, -1, true, true, new HidSequenceBinding("3", 0)),
+                new ButtonBinding(17, true, -1, true, true, new HidSequenceBinding("4", 0)),
+                new ButtonBinding(31, true, -1, true, true, new HidSequenceBinding("5", 0)),
+                new ButtonBinding(30, true, -1, true, true, new HidSequenceBinding("6", 0)),
+                new ButtonBinding(11, true, -1, true, true, new HidSequenceBinding("7", 0)),
+                new ButtonBinding(33, true, -1, true, true, new HidSequenceBinding("8", 0)),
+                new ButtonBinding(34, true, -1, true, true, new HidSequenceBinding("9", 0))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
+            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: -1);
 
             var expected = ReadExpected("generate_source_10_buttons.c");
 

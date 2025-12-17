@@ -3,105 +3,15 @@
 
 const button_binding_t button_bindings[] = {
     {
-        .pin = 7,
+        .pin = 32,
         .active_low = true,
-        .led_index = 0,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
         .function = {
             .type = HID_BINDING_SEQUENCE,
             .function.sequence = {
-                .sequence = {'a'},
-                .length = 1,
-                .delay = 0
-            }
-        }
-    },
-    {
-        .pin = 8,
-        .active_low = true,
-        .led_index = 1,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
-        .function = {
-            .type = HID_BINDING_SEQUENCE,
-            .function.sequence = {
-                .sequence = {'b'},
-                .length = 1,
-                .delay = 0
-            }
-        }
-    },
-    {
-        .pin = 9,
-        .active_low = true,
-        .led_index = 2,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
-        .function = {
-            .type = HID_BINDING_SEQUENCE,
-            .function.sequence = {
-                .sequence = {'c'},
-                .length = 1,
-                .delay = 0
-            }
-        }
-    },
-    {
-        .pin = 10,
-        .active_low = true,
-        .led_index = 3,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
-        .function = {
-            .type = HID_BINDING_SEQUENCE,
-            .function.sequence = {
-                .sequence = {'d'},
-                .length = 1,
-                .delay = 0
-            }
-        }
-    },
-    {
-        .pin = 11,
-        .active_low = true,
-        .led_index = 4,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
-        .function = {
-            .type = HID_BINDING_SEQUENCE,
-            .function.sequence = {
-                .sequence = {'e'},
-                .length = 1,
-                .delay = 0
-            }
-        }
-    },
-    {
-        .pin = 12,
-        .active_low = true,
-        .led_index = 5,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
-        .function = {
-            .type = HID_BINDING_SEQUENCE,
-            .function.sequence = {
-                .sequence = {'f'},
-                .length = 1,
-                .delay = 0
-            }
-        }
-    },
-    {
-        .pin = 13,
-        .active_low = true,
-        .led_index = 6,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
-        .function = {
-            .type = HID_BINDING_SEQUENCE,
-            .function.sequence = {
-                .sequence = {'g'},
+                .sequence = {'0'},
                 .length = 1,
                 .delay = 0
             }
@@ -110,13 +20,13 @@ const button_binding_t button_bindings[] = {
     {
         .pin = 14,
         .active_low = true,
-        .led_index = 7,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
         .function = {
             .type = HID_BINDING_SEQUENCE,
             .function.sequence = {
-                .sequence = {'h'},
+                .sequence = {'1'},
                 .length = 1,
                 .delay = 0
             }
@@ -125,13 +35,13 @@ const button_binding_t button_bindings[] = {
     {
         .pin = 15,
         .active_low = true,
-        .led_index = 8,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
         .function = {
             .type = HID_BINDING_SEQUENCE,
             .function.sequence = {
-                .sequence = {'i'},
+                .sequence = {'2'},
                 .length = 1,
                 .delay = 0
             }
@@ -140,13 +50,103 @@ const button_binding_t button_bindings[] = {
     {
         .pin = 16,
         .active_low = true,
-        .led_index = 9,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
         .function = {
             .type = HID_BINDING_SEQUENCE,
             .function.sequence = {
-                .sequence = {'j'},
+                .sequence = {'3'},
+                .length = 1,
+                .delay = 0
+            }
+        }
+    },
+    {
+        .pin = 17,
+        .active_low = true,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
+        .function = {
+            .type = HID_BINDING_SEQUENCE,
+            .function.sequence = {
+                .sequence = {'4'},
+                .length = 1,
+                .delay = 0
+            }
+        }
+    },
+    {
+        .pin = 31,
+        .active_low = true,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
+        .function = {
+            .type = HID_BINDING_SEQUENCE,
+            .function.sequence = {
+                .sequence = {'5'},
+                .length = 1,
+                .delay = 0
+            }
+        }
+    },
+    {
+        .pin = 30,
+        .active_low = true,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
+        .function = {
+            .type = HID_BINDING_SEQUENCE,
+            .function.sequence = {
+                .sequence = {'6'},
+                .length = 1,
+                .delay = 0
+            }
+        }
+    },
+    {
+        .pin = 11,
+        .active_low = true,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
+        .function = {
+            .type = HID_BINDING_SEQUENCE,
+            .function.sequence = {
+                .sequence = {'7'},
+                .length = 1,
+                .delay = 0
+            }
+        }
+    },
+    {
+        .pin = 33,
+        .active_low = true,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
+        .function = {
+            .type = HID_BINDING_SEQUENCE,
+            .function.sequence = {
+                .sequence = {'8'},
+                .length = 1,
+                .delay = 0
+            }
+        }
+    },
+    {
+        .pin = 34,
+        .active_low = true,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
+        .function = {
+            .type = HID_BINDING_SEQUENCE,
+            .function.sequence = {
+                .sequence = {'9'},
                 .length = 1,
                 .delay = 0
             }
