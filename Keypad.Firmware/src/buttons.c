@@ -2,7 +2,7 @@
 #include "hid.h"
 #include "util.h"
 #include "buttons.h"
-#include "../configuration_data.h"
+#include "configuration_data.h"
 
 static bool *button_state_s = NULL;
 static size_t button_state_capacity_s = 0;

@@ -12,7 +12,7 @@ namespace Keypad.Flasher.Server.Configuration
             var sb = new StringBuilder();
             sb.AppendLine("#pragma once");
             sb.AppendLine();
-            sb.AppendLine("#include \"configuration_data.h\"");
+            sb.AppendLine("#include \"src/configuration_data.h\"");
             sb.AppendLine();
             sb.AppendLine($"#define CONFIGURATION_BUTTON_CAPACITY {configuration.Buttons.Count}");
             sb.AppendLine($"#define CONFIGURATION_ENCODER_CAPACITY {configuration.Encoders.Count}");

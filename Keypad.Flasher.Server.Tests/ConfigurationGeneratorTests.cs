@@ -25,7 +25,7 @@ namespace Keypad.Flasher.Server.Tests
             var expected = Lines(
                 "#pragma once",
                 string.Empty,
-                "#include \"configuration_data.h\"",
+                "#include \"src/configuration_data.h\"",
                 string.Empty,
                 "#define CONFIGURATION_BUTTON_CAPACITY 2",
                 "#define CONFIGURATION_ENCODER_CAPACITY 0");

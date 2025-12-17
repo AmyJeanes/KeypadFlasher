@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#include "configuration.h"
+#include "../configuration.h"
 
 static bool button_state_storage_s[CONFIGURATION_BUTTON_CAPACITY];
 

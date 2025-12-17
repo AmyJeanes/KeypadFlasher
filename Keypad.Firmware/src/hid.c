@@ -2,7 +2,7 @@
 #include "userUsbHidKeyboardMouse/USBHIDKeyboardMouse.h"
 #include "led.h"
 #include "hid.h"
-#include "../configuration_data.h"
+#include "configuration_data.h"
 
 #define HID_CONSUMER_VOLUME_INCREMENT 0x00E9
 #define HID_CONSUMER_VOLUME_DECREMENT 0x00EA

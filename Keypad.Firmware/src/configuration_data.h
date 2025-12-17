@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#include "src/hid.h"
+#include "hid.h"
 
 typedef struct
 {
