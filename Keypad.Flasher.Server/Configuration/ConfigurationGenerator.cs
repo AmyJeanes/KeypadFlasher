@@ -7,6 +7,12 @@ namespace Keypad.Flasher.Server.Configuration
         public string GenerateHeader(ConfigurationDefinition configuration)
         {
             var neoPixelCount = CalculateNeoPixelCount(configuration.Buttons);
+            var neoPixelPin = configuration.NeoPixelPin;
+            if (neoPixelPin < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(configuration), "NeoPixel pin must be non-negative.");
+            }
+            var neoPixelPinMacro = $"P{neoPixelPin}";
 
             var sb = new StringBuilder();
             sb.AppendLine("#pragma once");
@@ -17,7 +23,7 @@ namespace Keypad.Flasher.Server.Configuration
             sb.AppendLine($"#define CONFIGURATION_ENCODER_CAPACITY {configuration.Encoders.Count}");
             sb.AppendLine($"#define CONFIGURATION_DEBUG_MODE {ToCInteger(configuration.DebugMode)}");
             sb.AppendLine();
-            sb.AppendLine("#define PIN_NEO P34");
+            sb.AppendLine($"#define PIN_NEO {neoPixelPinMacro}");
             sb.AppendLine($"#define NEO_COUNT {neoPixelCount}");
             sb.AppendLine("#define NEO_GRB");
             return sb.ToString();

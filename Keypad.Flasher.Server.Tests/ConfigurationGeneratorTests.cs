@@ -18,7 +18,8 @@ namespace Keypad.Flasher.Server.Tests
                     new ButtonBinding(2, false, 0, true, true, new HidFunctionBinding("hid_consumer_volume_up"))
                 },
                 Array.Empty<EncoderBinding>(),
-                DebugMode: false);
+                DebugMode: false,
+                NeoPixelPin: 34);
 
             var expected = Lines(
                 "#pragma once",
@@ -48,11 +49,26 @@ namespace Keypad.Flasher.Server.Tests
                     new ButtonBinding(2, true, 4, false, false, new HidSequenceBinding("b", 0))
                 },
                 Array.Empty<EncoderBinding>(),
-                DebugMode: false);
+                DebugMode: false,
+                NeoPixelPin: 34);
 
             var result = Generator.GenerateHeader(configuration);
 
             Assert.That(result, Does.Contain("#define NEO_COUNT 5"));
+        }
+
+        [Test]
+        public void GenerateHeader_WithCustomNeoPixelPin_EmitsPin()
+        {
+            var configuration = new ConfigurationDefinition(
+                Array.Empty<ButtonBinding>(),
+                Array.Empty<EncoderBinding>(),
+                DebugMode: false,
+                NeoPixelPin: 31);
+
+            var result = Generator.GenerateHeader(configuration);
+
+            Assert.That(result, Does.Contain("#define PIN_NEO P31"));
         }
 
         [Test]
@@ -61,7 +77,8 @@ namespace Keypad.Flasher.Server.Tests
             var configuration = new ConfigurationDefinition(
                 Array.Empty<ButtonBinding>(),
                 Array.Empty<EncoderBinding>(),
-                DebugMode: true);
+                DebugMode: true,
+                NeoPixelPin: 34);
 
             var result = Generator.GenerateHeader(configuration);
 
@@ -89,7 +106,7 @@ namespace Keypad.Flasher.Server.Tests
                     Function: new HidFunctionBinding("hid_consumer_volume_down"))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false);
+            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
 
             var expected = ReadExpected("generate_source_2_buttons.c");
 
@@ -133,7 +150,7 @@ namespace Keypad.Flasher.Server.Tests
                     Function: new HidFunctionBinding("hid_consumer_volume_down"))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false);
+            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
 
             var expected = ReadExpected("generate_source_4_buttons.c");
 
@@ -151,7 +168,7 @@ namespace Keypad.Flasher.Server.Tests
                 new ButtonBinding(14, true, 1, false, false, new HidSequenceBinding("2", 0))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false);
+            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
 
             var expected = ReadExpected("generate_source_2_button_module.c");
 
@@ -173,7 +190,7 @@ namespace Keypad.Flasher.Server.Tests
                 new EncoderBinding(10, 11, new HidFunctionBinding("hid_consumer_volume_up"), new HidFunctionBinding("hid_consumer_volume_down"))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, encoders, DebugMode: true);
+            var configuration = new ConfigurationDefinition(buttons, encoders, DebugMode: true, NeoPixelPin: 34);
 
             var result = Generator.GenerateSource(configuration);
 
@@ -198,7 +215,7 @@ namespace Keypad.Flasher.Server.Tests
                 new ButtonBinding(16, true, 9, false, false, new HidSequenceBinding("j", 0))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false);
+            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
 
             var expected = ReadExpected("generate_source_10_buttons.c");
 
@@ -251,7 +268,7 @@ namespace Keypad.Flasher.Server.Tests
                     CounterClockwise: new HidFunctionBinding("hid_consumer_volume_down"))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, encoders, DebugMode: false);
+            var configuration = new ConfigurationDefinition(buttons, encoders, DebugMode: false, NeoPixelPin: 34);
 
             var expected = ReadExpected("generate_source_4_buttons_1_dial.c");
 

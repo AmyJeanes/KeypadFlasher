@@ -31,5 +31,6 @@ namespace Keypad.Flasher.Server.Configuration
     public sealed record ConfigurationDefinition(
         IReadOnlyList<ButtonBinding> Buttons,
         IReadOnlyList<EncoderBinding> Encoders,
-        bool DebugMode);
+        bool DebugMode,
+        int NeoPixelPin);
 }

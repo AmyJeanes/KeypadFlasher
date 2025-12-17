@@ -149,7 +149,7 @@ namespace Keypad.Flasher.Server.Controllers
                     Function: new HidSequenceBinding("2", 0))
             };
 
-            return new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false);
+            return new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
         }
 
         private bool IsDebugRequested()
