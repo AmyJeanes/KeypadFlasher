@@ -5,9 +5,9 @@ const button_binding_t button_bindings[] = {
     {
         .pin = 32,
         .active_low = true,
-        .led_index = 0,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
         .function = {
             .type = HID_BINDING_SEQUENCE,
             .function.sequence = {
@@ -20,9 +20,9 @@ const button_binding_t button_bindings[] = {
     {
         .pin = 14,
         .active_low = true,
-        .led_index = 1,
-        .bootloader_on_boot = false,
-        .bootloader_chord_member = false,
+        .led_index = -1,
+        .bootloader_on_boot = true,
+        .bootloader_chord_member = true,
         .function = {
             .type = HID_BINDING_SEQUENCE,
             .function.sequence = {

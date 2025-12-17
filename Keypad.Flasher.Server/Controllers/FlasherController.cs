@@ -131,22 +131,10 @@ namespace Keypad.Flasher.Server.Controllers
 
         internal static ConfigurationDefinition CreateDefaultConfiguration()
         {
-            var buttons = new List<ButtonBinding>
+             var buttons = new List<ButtonBinding>
             {
-                new ButtonBinding(
-                    Pin: 32,
-                    ActiveLow: true,
-                    LedIndex: 0,
-                    BootloaderOnBoot: false,
-                    BootloaderChordMember: false,
-                    Function: new HidSequenceBinding("1", 0)),
-                new ButtonBinding(
-                    Pin: 14,
-                    ActiveLow: true,
-                    LedIndex: 1,
-                    BootloaderOnBoot: false,
-                    BootloaderChordMember: false,
-                    Function: new HidSequenceBinding("2", 0))
+                new ButtonBinding(32, true, 0, true, true, new HidSequenceBinding("1", 0)),
+                new ButtonBinding(14, true, 1, true, true, new HidSequenceBinding("2", 0))
             };
 
             return new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);

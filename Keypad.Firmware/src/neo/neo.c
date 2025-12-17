@@ -18,6 +18,9 @@
 // Libraries, Variables and Constants
 // ===================================================================================
 #include "../../configuration.h"
+
+#if NEO_COUNT > 0
+
 #include "neo.h"
 
 #define NEOPIN PIN_asm(PIN_NEO)             // convert PIN_NEO for inline assembly
@@ -157,3 +160,5 @@ void NEO_writeHue(uint8_t pixel, uint8_t hue, uint8_t bright) {
 void NEO_clearPixel(uint8_t pixel) {
   NEO_writeColor(pixel, 0, 0, 0);
 }
+
+#endif

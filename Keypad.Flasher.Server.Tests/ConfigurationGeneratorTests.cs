@@ -61,7 +61,10 @@ namespace Keypad.Flasher.Server.Tests
         public void GenerateHeader_WithCustomNeoPixelPin_EmitsPin()
         {
             var configuration = new ConfigurationDefinition(
-                Array.Empty<ButtonBinding>(),
+                new List<ButtonBinding>
+                {
+                    new ButtonBinding(1, true, 0, false, false, new HidSequenceBinding("a", 0))
+                },
                 Array.Empty<EncoderBinding>(),
                 DebugMode: false,
                 NeoPixelPin: 31);
@@ -69,6 +72,25 @@ namespace Keypad.Flasher.Server.Tests
             var result = Generator.GenerateHeader(configuration);
 
             Assert.That(result, Does.Contain("#define PIN_NEO P31"));
+        }
+
+        [Test]
+        public void GenerateHeader_WithNoAssignedLedIndices_SetsNeoCountToZero()
+        {
+            var configuration = new ConfigurationDefinition(
+                new List<ButtonBinding>
+                {
+                    new ButtonBinding(1, true, -1, false, false, new HidSequenceBinding("a", 0))
+                },
+                Array.Empty<EncoderBinding>(),
+                DebugMode: false,
+                NeoPixelPin: 34);
+
+            var result = Generator.GenerateHeader(configuration);
+
+            Assert.That(result, Does.Contain("#define NEO_COUNT 0"));
+            Assert.That(result, Does.Not.Contain("#define PIN_NEO"));
+            Assert.That(result, Does.Not.Contain("#define NEO_GRB"));
         }
 
         [Test]
@@ -121,33 +143,33 @@ namespace Keypad.Flasher.Server.Tests
             var buttons = new List<ButtonBinding>
             {
                 new ButtonBinding(
-                    Pin: 10,
+                    Pin: 15,
                     ActiveLow: true,
                     LedIndex: 0,
-                    BootloaderOnBoot: false,
-                    BootloaderChordMember: false,
-                    Function: new HidSequenceBinding("x", 0)),
-                new ButtonBinding(
-                    Pin: 12,
-                    ActiveLow: true,
-                    LedIndex: 1,
-                    BootloaderOnBoot: false,
-                    BootloaderChordMember: true,
-                    Function: new HidSequenceBinding("y", 0)),
-                new ButtonBinding(
-                    Pin: 14,
-                    ActiveLow: false,
-                    LedIndex: 2,
-                    BootloaderOnBoot: false,
-                    BootloaderChordMember: false,
-                    Function: new HidSequenceBinding("Enter", 2)),
-                new ButtonBinding(
-                    Pin: 15,
-                    ActiveLow: false,
-                    LedIndex: -1,
                     BootloaderOnBoot: true,
                     BootloaderChordMember: true,
-                    Function: new HidFunctionBinding("hid_consumer_volume_down"))
+                    Function: new HidSequenceBinding("1", 0)),
+                new ButtonBinding(
+                    Pin: 16,
+                    ActiveLow: true,
+                    LedIndex: 1,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("2", 0)),
+                new ButtonBinding(
+                    Pin: 17,
+                    ActiveLow: true,
+                    LedIndex: 2,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("3", 0)),
+                new ButtonBinding(
+                    Pin: 11,
+                    ActiveLow: true,
+                    LedIndex: 3,
+                    BootloaderOnBoot: true,
+                    BootloaderChordMember: true,
+                    Function: new HidSequenceBinding("4", 0))
             };
 
             var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
@@ -164,11 +186,11 @@ namespace Keypad.Flasher.Server.Tests
         {
             var buttons = new List<ButtonBinding>
             {
-                new ButtonBinding(32, true, 0, false, false, new HidSequenceBinding("1", 0)),
-                new ButtonBinding(14, true, 1, false, false, new HidSequenceBinding("2", 0))
+                new ButtonBinding(32, true, -1, true, true, new HidSequenceBinding("1", 0)),
+                new ButtonBinding(14, true, -1, true, true, new HidSequenceBinding("2", 0))
             };
 
-            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: 34);
+            var configuration = new ConfigurationDefinition(buttons, Array.Empty<EncoderBinding>(), DebugMode: false, NeoPixelPin: -1);
 
             var expected = ReadExpected("generate_source_2_button_module.c");
 

@@ -1,17 +1,11 @@
 #include <Arduino.h>
 #include "../configuration.h"
-#include "neo/neo.h"
 #include "led.h"
 
 #if !CONFIGURATION_DEBUG_MODE
 
-// ===================================================================================
-// Color section
-// ============================================================================
-
-#if NEO_COUNT <= 0
-#error "NEO_COUNT must be greater than 0"
-#endif
+#if NEO_COUNT > 0
+#include "neo/neo.h"
 
 static enum led_keyboard_mode_t led_mode_s = LED_LOOP;
 static int color_hue_s[NEO_COUNT] = {0}; // hue value: 0..191 color map
@@ -89,5 +83,30 @@ void led_update()
 
   NEO_update();
 }
+
+#else
+
+void led_set_color_hue(uint8_t led0, uint8_t led1, uint8_t led2)
+{
+  (void)led0;
+  (void)led1;
+  (void)led2;
+}
+
+void led_set_mode(enum led_keyboard_mode_t mode)
+{
+  (void)mode;
+}
+
+void led_presskey(int key)
+{
+  (void)key;
+}
+
+void led_update()
+{
+}
+
+#endif
 
 #endif

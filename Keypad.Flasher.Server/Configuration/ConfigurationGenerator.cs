@@ -7,13 +7,6 @@ namespace Keypad.Flasher.Server.Configuration
         public string GenerateHeader(ConfigurationDefinition configuration)
         {
             var neoPixelCount = CalculateNeoPixelCount(configuration.Buttons);
-            var neoPixelPin = configuration.NeoPixelPin;
-            if (neoPixelPin < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(configuration), "NeoPixel pin must be non-negative.");
-            }
-            var neoPixelPinMacro = $"P{neoPixelPin}";
-
             var sb = new StringBuilder();
             sb.AppendLine("#pragma once");
             sb.AppendLine();
@@ -23,9 +16,22 @@ namespace Keypad.Flasher.Server.Configuration
             sb.AppendLine($"#define CONFIGURATION_ENCODER_CAPACITY {configuration.Encoders.Count}");
             sb.AppendLine($"#define CONFIGURATION_DEBUG_MODE {ToCInteger(configuration.DebugMode)}");
             sb.AppendLine();
-            sb.AppendLine($"#define PIN_NEO {neoPixelPinMacro}");
-            sb.AppendLine($"#define NEO_COUNT {neoPixelCount}");
-            sb.AppendLine("#define NEO_GRB");
+            if (neoPixelCount > 0)
+            {
+                if (configuration.NeoPixelPin < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(configuration), "NeoPixel pin must be non-negative when LEDs are configured.");
+                }
+
+                var neoPixelPinMacro = $"P{configuration.NeoPixelPin}";
+                sb.AppendLine($"#define PIN_NEO {neoPixelPinMacro}");
+                sb.AppendLine($"#define NEO_COUNT {neoPixelCount}");
+                sb.AppendLine("#define NEO_GRB");
+            }
+            else
+            {
+                sb.AppendLine("#define NEO_COUNT 0");
+            }
             return sb.ToString();
         }
 
@@ -115,7 +121,7 @@ namespace Keypad.Flasher.Server.Configuration
             }
 
             var count = maxLedIndex + 1;
-            return count < 1 ? 1 : count;
+            return count < 0 ? 0 : count;
         }
 
         private static void AppendButton(StringBuilder sb, ButtonBinding button, bool isLast, bool debugMode)
