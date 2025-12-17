@@ -9,20 +9,10 @@
 //app include
 #include "src/buttons.h"
 #include "src/encoder.h"
-#include "src/keyboard.h"
+#include "src/hid.h"
 #include "src/led.h"
 #include "src/util.h"
-
-// Button (Mechnical, left to right)
-#define PIN_BTN_1 11
-#define PIN_BTN_2 17
-#define PIN_BTN_3 16
-#define PIN_BTN_ENC 33
-
-#define ENCODER_A 31
-#define ENCODER_B 30
-
-
+#include "configuration.h"
 #define LED_PIN 34 // Pin for the LED strip, configure neo leds in src/neo/config.h
 
 
@@ -40,18 +30,20 @@ void setup()
   delay(10);
   NEO_clearAll();
 
-  // Go in bootloader more if connected with encoder button pressed
-  if (!digitalRead(PIN_BTN_ENC))
+  // Go in bootloader mode if the configured boot button is held during power-on
+  if (configuration_bootloader_requested())
   {
-    NEO_writeHue(0, NEO_CYAN, NEO_BRIGHT_KEYS); // set led1 to cyan
-    NEO_writeHue(1, NEO_BLUE, NEO_BRIGHT_KEYS); // set led2 to blue
-    NEO_writeHue(2, NEO_MAG, NEO_BRIGHT_KEYS); //  set led3 to magenta
-    NEO_update();                              // update pixels
+    const uint8_t boot_hues[3] = {NEO_CYAN, NEO_BLUE, NEO_MAG};
+    for (uint8_t i = 0; i < NEO_COUNT; ++i)
+    {
+      NEO_writeHue(i, boot_hues[i % 3], NEO_BRIGHT_KEYS);
+    }
+    NEO_update(); // update pixels
     BOOT_now();     // jump to bootloader
   }
 
-  buttons_setup(PIN_BTN_1, PIN_BTN_2, PIN_BTN_3, PIN_BTN_ENC);
-  encoder_setup(ENCODER_A, ENCODER_B);
+  buttons_setup();
+  encoder_setup();
   led_set_mode(LED_LOOP);
   USBInit();
 }
@@ -64,8 +56,9 @@ void loop()
   //task update
   buttons_update();
   encoder_update();
+  hid_service();
   led_update();
 
-  //debouncing
-  delay(5); 
+  // light idle to avoid saturating USB
+  delay(1);
 }

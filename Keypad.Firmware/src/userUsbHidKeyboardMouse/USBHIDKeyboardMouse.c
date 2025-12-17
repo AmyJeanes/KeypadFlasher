@@ -18,6 +18,7 @@ volatile __xdata uint8_t UpPoint1_Busy =
 
 __xdata uint8_t HIDKey[8] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
 __xdata uint8_t HIDMouse[4] = {0x0, 0x0, 0x0, 0x0};
+__xdata uint16_t HIDConsumer = 0;
 
 #define SHIFT 0x80
 __code uint8_t _asciimap[128] = {
@@ -177,7 +178,42 @@ void USB_EP1_OUT() {
   }
 }
 
+static uint8_t USB_EP1_send_consumer(uint8_t wait_for_ready) {
+  if (UsbConfig == 0) {
+    return 0;
+  }
+
+  if (wait_for_ready) {
+    __data uint16_t waitWriteCount = 0;
+    while (UpPoint1_Busy) {
+      waitWriteCount++;
+      delayMicroseconds(5);
+      if (waitWriteCount >= 50000) {
+        return 0;
+      }
+    }
+  } else {
+    if (UpPoint1_Busy) {
+      return 0;
+    }
+  }
+
+  Ep1Buffer[64 + 0] = 3;
+  Ep1Buffer[64 + 1] = (uint8_t)(HIDConsumer & 0xFF);
+  Ep1Buffer[64 + 2] = (uint8_t)(HIDConsumer >> 8);
+  UEP1_T_LEN = 1 + sizeof(HIDConsumer);
+
+  UpPoint1_Busy = 1;
+  UEP1_CTRL = UEP1_CTRL & ~MASK_UEP_T_RES | UEP_T_RES_ACK;
+
+  return 1;
+}
+
 uint8_t USB_EP1_send(__data uint8_t reportID) {
+  if (reportID == 3) {
+    return USB_EP1_send_consumer(1);
+  }
+
   if (UsbConfig == 0) {
     return 0;
   }
@@ -294,6 +330,61 @@ void Keyboard_releaseAll(void) {
     HIDKey[i] = 0;
   }
   USB_EP1_send(1);
+}
+
+uint8_t Keyboard_pressUsage(__data uint8_t usage) {
+  if (usage == 0) {
+    return 0;
+  }
+
+  for (__data uint8_t i = 2; i < 8; i++) {
+    if (HIDKey[i] == usage) {
+      USB_EP1_send(1);
+      return 1;
+    }
+  }
+
+  for (__data uint8_t i = 2; i < 8; i++) {
+    if (HIDKey[i] == 0x00) {
+      HIDKey[i] = usage;
+      USB_EP1_send(1);
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+uint8_t Keyboard_releaseUsage(__data uint8_t usage) {
+  if (usage == 0) {
+    return 0;
+  }
+
+  for (__data uint8_t i = 2; i < 8; i++) {
+    if (HIDKey[i] == usage) {
+      HIDKey[i] = 0x00;
+    }
+  }
+
+  USB_EP1_send(1);
+  return 1;
+}
+
+uint8_t Keyboard_consumer_send(__data uint16_t usage) {
+  HIDConsumer = usage;
+  if (!USB_EP1_send_consumer(1)) {
+    return 0;
+  }
+  HIDConsumer = 0;
+  if (!USB_EP1_send_consumer(1)) {
+    return 0;
+  }
+  return 1;
+}
+
+uint8_t Keyboard_consumer_try_send(__data uint16_t usage) {
+  HIDConsumer = usage;
+  return USB_EP1_send_consumer(0);
 }
 
 uint8_t Keyboard_write(__data uint8_t c) {

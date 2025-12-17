@@ -71,6 +71,10 @@ void USBInit(void);
 uint8_t Keyboard_press(__data uint8_t k);
 uint8_t Keyboard_release(__data uint8_t k);
 void Keyboard_releaseAll(void);
+uint8_t Keyboard_pressUsage(__data uint8_t usage);
+uint8_t Keyboard_releaseUsage(__data uint8_t usage);
+uint8_t Keyboard_consumer_send(__data uint16_t usage);
+uint8_t Keyboard_consumer_try_send(__data uint16_t usage);
 
 uint8_t Keyboard_write(__data uint8_t c);
 

@@ -1,0 +1,3 @@
+- This is an Arduino project running on a microcontroller
+- Toolchain is SDCC C90-only (no C++ keywords or features)
+- Use `arduino-cli compile --fqbn CH55xDuino:mcs51:ch552:usb_settings=user148,clock=16internal --export-binaries` to compile firmware inside the `Keypad.Firmware` folder.
