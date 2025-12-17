@@ -29,13 +29,18 @@ namespace Keypad.Flasher.Server.Controllers
             var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
             lock (_compileLock)
             {
+                Directory.CreateDirectory(tempPath);
+                var workingFirmwarePath = Path.Combine(tempPath, "Keypad.Firmware");
+                CopyDirectory(firmwarePath, workingFirmwarePath);
+                var outputPath = Path.Combine(tempPath, "output");
+
                 var configuration = CreateDefaultConfiguration();
-                var headerPath = Path.Combine(firmwarePath, "configuration.h");
-                var sourcePath = Path.Combine(firmwarePath, "configuration.c");
+                var headerPath = Path.Combine(workingFirmwarePath, "configuration.h");
+                var sourcePath = Path.Combine(workingFirmwarePath, "configuration.c");
                 System.IO.File.WriteAllText(headerPath, _configurationGenerator.GenerateHeader(configuration));
                 System.IO.File.WriteAllText(sourcePath, _configurationGenerator.GenerateSource(configuration));
 
-                Directory.CreateDirectory(tempPath);
+                Directory.CreateDirectory(outputPath);
                 try
                 {
                     // arduino-cli compile --fqbn CH55xDuino:mcs51:ch552:usb_settings=user148,clock=16internal --export-binaries
@@ -44,7 +49,7 @@ namespace Keypad.Flasher.Server.Controllers
                         FileName = "arduino-cli",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
-                        WorkingDirectory = firmwarePath,
+                        WorkingDirectory = workingFirmwarePath,
                         UseShellExecute = false,
                         CreateNoWindow = true
                     };
@@ -55,7 +60,7 @@ namespace Keypad.Flasher.Server.Controllers
                     args.ArgumentList.Add("arduino-cli.yaml");
                     args.ArgumentList.Add("--export-binaries");
                     args.ArgumentList.Add("--output-dir");
-                    args.ArgumentList.Add(tempPath);
+                    args.ArgumentList.Add(outputPath);
 
                     var stdout = new StringBuilder();
                     var stderr = new StringBuilder();
@@ -90,7 +95,7 @@ namespace Keypad.Flasher.Server.Controllers
                         _logger.LogInformation("arduino-cli compile succeeded. ExitCode: {ExitCode}\nStdOut:\n{StdOut}", process.ExitCode, stdout.ToString());
                     }
 
-                    var path = Path.Combine(tempPath, "Keypad.Firmware.ino.hex");
+                    var path = Path.Combine(outputPath, "Keypad.Firmware.ino.hex");
 
                     if (!System.IO.File.Exists(path))
                     {
@@ -162,6 +167,41 @@ namespace Keypad.Flasher.Server.Controllers
             };
 
             return new ConfigurationDefinition(buttons, encoders);
+        }
+
+        private static void CopyDirectory(string sourceDir, string destinationDir)
+        {
+            if (!Directory.Exists(sourceDir))
+            {
+                throw new DirectoryNotFoundException($"Source directory not found: {sourceDir}");
+            }
+
+            Directory.CreateDirectory(destinationDir);
+
+            var options = new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = false
+            };
+
+            foreach (var directoryPath in Directory.EnumerateDirectories(sourceDir, "*", options))
+            {
+                var relativePath = Path.GetRelativePath(sourceDir, directoryPath);
+                Directory.CreateDirectory(Path.Combine(destinationDir, relativePath));
+            }
+
+            foreach (var filePath in Directory.EnumerateFiles(sourceDir, "*", options))
+            {
+                var relativePath = Path.GetRelativePath(sourceDir, filePath);
+                var targetPath = Path.Combine(destinationDir, relativePath);
+                var targetDirectory = Path.GetDirectoryName(targetPath);
+                if (!string.IsNullOrEmpty(targetDirectory))
+                {
+                    Directory.CreateDirectory(targetDirectory);
+                }
+
+                System.IO.File.Copy(filePath, targetPath, overwrite: true);
+            }
         }
     }
 }
