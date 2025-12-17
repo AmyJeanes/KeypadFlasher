@@ -431,6 +431,3 @@ FodyWeavers.xsd
 
 Keypad.Firmware/build/
 *.tfvars
-
-Keypad.Firmware/configuration.c
-Keypad.Firmware/configuration.h
