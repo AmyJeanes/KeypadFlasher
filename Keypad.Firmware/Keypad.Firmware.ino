@@ -40,19 +40,16 @@ void setup()
   if (configuration_bootloader_requested())
   {
 #if NEO_COUNT > 0
-    const uint8_t boot_hues[3] = {NEO_CYAN, NEO_BLUE, NEO_MAG};
-    for (uint8_t i = 0; i < NEO_COUNT; ++i)
-    {
-      NEO_writeHue(i, boot_hues[i % 3], NEO_BRIGHT_KEYS);
-    }
-    NEO_update(); // update pixels
+    led_show_bootloader_indicator();
 #endif
     BOOT_now();     // jump to bootloader
   }
 
   buttons_setup();
   encoder_setup();
+#if NEO_COUNT > 0
   led_set_mode(LED_LOOP);
+#endif
   USBInit();
 #endif
 }
@@ -68,7 +65,9 @@ void loop()
   buttons_update();
   encoder_update();
   hid_service();
+#if NEO_COUNT > 0
   led_update();
+#endif
 
   // light idle to avoid saturating USB
   delay(1);

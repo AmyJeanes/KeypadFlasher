@@ -22,6 +22,9 @@ void led_set_mode(enum led_keyboard_mode_t mode);
 // set led color in FIX mode
 void led_set_color_hue(uint8_t led0, uint8_t led1, uint8_t led2);
 
+// show bootloader entry feedback
+void led_show_bootloader_indicator(void);
+
 // update led task
 void led_update();
 

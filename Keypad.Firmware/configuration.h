@@ -10,5 +10,5 @@
 #define CONFIGURATION_DEBUG_MODE 0
 
 #define PIN_NEO P34
-#define NEO_COUNT 3
+#define NEO_COUNT 2
 #define NEO_GRB

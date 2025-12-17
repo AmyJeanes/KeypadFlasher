@@ -129,6 +129,7 @@ void hid_handle_button(size_t button_index, hid_trigger_mode_t mode)
 
   const button_binding_t *binding = &button_bindings[button_index];
 
+#if NEO_COUNT > 0
   if (binding->led_index >= 0)
   {
     if (mode == HID_TRIGGER_PRESS)
@@ -140,6 +141,7 @@ void hid_handle_button(size_t button_index, hid_trigger_mode_t mode)
       led_presskey(-1);
     }
   }
+#endif
 
   hid_run_binding(&binding->function, mode);
 }

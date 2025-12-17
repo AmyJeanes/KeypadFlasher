@@ -3,6 +3,7 @@
 #include "util.h"
 #include "buttons.h"
 #include "configuration_data.h"
+#include "led.h"
 #include "../configuration.h"
 
 #if !CONFIGURATION_DEBUG_MODE
@@ -81,6 +82,9 @@ void buttons_update(void)
 
     if (has_bootloader_chord && bootloader_chord_candidate)
     {
+#if NEO_COUNT > 0
+        led_show_bootloader_indicator();
+#endif
         BOOT_now();
     }
 }

@@ -2,9 +2,7 @@
 #include "../configuration.h"
 #include "led.h"
 
-#if !CONFIGURATION_DEBUG_MODE
-
-#if NEO_COUNT > 0
+#if !CONFIGURATION_DEBUG_MODE && NEO_COUNT > 0
 #include "neo/neo.h"
 
 static enum led_keyboard_mode_t led_mode_s = LED_LOOP;
@@ -20,6 +18,16 @@ void led_set_color_hue(uint8_t led0, uint8_t led1, uint8_t led2)
   {
     color_hue_s[i] = hues[i % 3];
   }
+}
+
+void led_show_bootloader_indicator(void)
+{
+  for (uint8_t i = 0; i < NEO_COUNT; ++i)
+  {
+    NEO_writeHue(i, NEO_BLUE, NEO_BRIGHT_KEYS);
+  }
+  current_led_s = -1;
+  NEO_update();
 }
 
 void led_set_mode(enum led_keyboard_mode_t mode)
@@ -83,30 +91,4 @@ void led_update()
 
   NEO_update();
 }
-
-#else
-
-void led_set_color_hue(uint8_t led0, uint8_t led1, uint8_t led2)
-{
-  (void)led0;
-  (void)led1;
-  (void)led2;
-}
-
-void led_set_mode(enum led_keyboard_mode_t mode)
-{
-  (void)mode;
-}
-
-void led_presskey(int key)
-{
-  (void)key;
-}
-
-void led_update()
-{
-}
-
-#endif
-
 #endif
