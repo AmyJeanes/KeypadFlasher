@@ -204,6 +204,38 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       ],
       encoders: [],
     },
+      "165-238-32-190": {
+    name: "Sikai 6 Keys 1 Knob",
+    layout: {
+      buttons: [
+        { id: 0, pin: 11, activeLow: true, ledIndex: 0, bootloaderOnBoot: false, bootloaderChordMember: true },
+        { id: 1, pin: 17, activeLow: true, ledIndex: 1, bootloaderOnBoot: false, bootloaderChordMember: true },
+        { id: 2, pin: 16, activeLow: true, ledIndex: 2, bootloaderOnBoot: false, bootloaderChordMember: true },
+        { id: 3, pin: 15, activeLow: true, ledIndex: 3, bootloaderOnBoot: false, bootloaderChordMember: true },
+        { id: 4, pin: 14, activeLow: true, ledIndex: 4, bootloaderOnBoot: false, bootloaderChordMember: true },
+        { id: 5, pin: 32, activeLow: true, ledIndex: 5, bootloaderOnBoot: false, bootloaderChordMember: true },
+      ],
+      encoders: [
+        { id: 0, pinA: 31, pinB: 30, press: { pin: 33, activeLow: true, bootloaderOnBoot: true, bootloaderChordMember: false } },
+      ],
+      neoPixelPin: 34,
+      neoPixelReversed: false,
+      displayRows: [3, 3],
+    },
+    defaultBindings: {
+      buttons: [
+        { id: 0, binding: fnBinding("hid_consumer_media_previous") },
+        { id: 1, binding: fnBinding("hid_consumer_media_play_pause") },
+        { id: 2, binding: fnBinding("hid_consumer_media_next") },
+        { id: 3, binding: seq("c", 1) },
+        { id: 4, binding: seq("x", 1) },
+        { id: 5, binding: seq("v", 1) },
+      ],
+      encoders: [
+        { id: 0, clockwise: fnBinding("hid_consumer_volume_up"), counterClockwise: fnBinding("hid_consumer_volume_down"), press: fnBinding("hid_consumer_mute") },
+      ],
+    },
+  },
   },  
 };
 
