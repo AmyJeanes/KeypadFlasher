@@ -60,16 +60,25 @@ export type BindingProfileDto = {
   encoders: { id: number; clockwise: HidBindingDto; counterClockwise: HidBindingDto; press?: HidBindingDto }[];
 };
 
-export type KnownDeviceProfile = { name: string; layout: DeviceLayoutDto; defaultBindings: BindingProfileDto; hideFromDemo?: boolean };
+export type KnownDeviceProfile = {
+  name: string;
+  hideFromDemo?: boolean;
+  bootloaderIds: string[];
+  layout: DeviceLayoutDto;
+  defaultBindings: BindingProfileDto;
+};
 
 const key = (ch: string, modifiers = 0): HidStepDto => ({ kind: "Key", keycode: ch.charCodeAt(0), modifiers, holdMs: 10, gapMs: 10 });
 const fnStep = (fn: string, gapMs = 0): HidStepDto => ({ kind: "Function", functionPointer: fn, gapMs });
 const seq = (sequence: string, modifiers = 0): HidBindingDto => ({ type: "Sequence", steps: sequence.split("").map((c) => key(c, modifiers)) });
 const fnBinding = (fn: string): HidBindingDto => ({ type: "Sequence", steps: [fnStep(fn)] });
 
-export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
-  "76-190-65-190": {
+export const DEVICE_PROFILES: KnownDeviceProfile[] = [
+  {
     name: "2 Keys",
+    bootloaderIds: [
+      "76-190-65-190"
+    ],
     layout: {
       buttons: [
         { id: 0, pin: 14, activeLow: true, ledIndex: -1, bootloaderOnBoot: true, bootloaderChordMember: false },
@@ -87,8 +96,12 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       encoders: [],
     },
   },
-  "126-80-44-189": {
+  {
     name: "3 Keys 1 Knob",
+    bootloaderIds: [
+      "126-80-44-189",
+      "229-68-44-189"
+    ],
     layout: {
       buttons: [
         { id: 0, pin: 16, activeLow: true, ledIndex: 2, bootloaderOnBoot: false, bootloaderChordMember: true },
@@ -113,8 +126,11 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       ],
     },
   },
-  "49-174-205-190": {
+  {
     name: "4 Keys",
+    bootloaderIds: [
+      "49-174-205-190"
+    ],
     layout: {
       buttons: [
         { id: 0, pin: 15, activeLow: true, ledIndex: 0, bootloaderOnBoot: true, bootloaderChordMember: true },
@@ -137,8 +153,11 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       encoders: [],
     },
   },
-  "144-165-233-190": {
+  {
     name: "6 Keys 1 Knob",
+    bootloaderIds: [
+      "144-165-233-190"
+    ],
     layout: {
       buttons: [
         { id: 0, pin: 32, activeLow: true, ledIndex: 0, bootloaderOnBoot: false, bootloaderChordMember: true },
@@ -169,9 +188,12 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       ],
     },
   },
-  "165-238-32-190": {
+  {
     name: "6 Keys 1 Knob (Sikai)",
     hideFromDemo: true,
+    bootloaderIds: [
+      "165-238-32-190"
+    ],
     layout: {
       buttons: [
         { id: 0, pin: 11, activeLow: true, ledIndex: 0, bootloaderOnBoot: false, bootloaderChordMember: true },
@@ -202,8 +224,11 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       ],
     },
   },
-  "24-26-109-190": {
+  {
     name: "10 Keys",
+    bootloaderIds: [
+      "24-26-109-190"
+    ],
     layout: {
       buttons: [
         { id: 0, pin: 32, activeLow: true, ledIndex: -1, bootloaderOnBoot: true, bootloaderChordMember: true },
@@ -238,9 +263,14 @@ export const DEVICE_PROFILES: Record<string, KnownDeviceProfile> = {
       encoders: [],
     },
   },  
-};
+];
 
 export function findProfileForBootloaderId(id: number[]): KnownDeviceProfile | null {
   const key = id.join("-");
-  return DEVICE_PROFILES[key] ?? null;
+  for (const profile of DEVICE_PROFILES) {
+    if (profile.bootloaderIds.includes(key)) {
+      return profile;
+    }
+  }
+  return null;
 }

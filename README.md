@@ -18,7 +18,6 @@ If you wish to help develop the project or add support for new keypads, please s
 
 The following is a list of tested and known compatible devices, but other devices using the CH55x series microcontrollers may also work.
 
-
 They all have USB-C connectors unless otherwise noted:
 
 - [2 Keys](https://www.aliexpress.com/item/1005004970126333.html?spm=a2g0o.order_detail.order_detail_item.3.3c7af19cNrdJJB)

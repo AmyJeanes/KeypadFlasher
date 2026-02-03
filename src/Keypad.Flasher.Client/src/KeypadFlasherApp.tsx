@@ -514,13 +514,13 @@ export default function KeypadFlasherApp() {
 
   const defaultDemoKey = "144-165-233-190"; // 6 Keys 1 Knob
 
-  const demoOptions = useMemo(() => Object.entries(DEVICE_PROFILES)
-    .filter(([, profile]) => !profile.hideFromDemo)
-    .map(([key, profile]) => ({
-      key,
+  const demoOptions = useMemo(() => DEVICE_PROFILES
+    .filter((profile) => !profile.hideFromDemo)
+    .flatMap((profile) => profile.bootloaderIds.map((bootloaderKey) => ({
+      key: bootloaderKey,
       name: profile.name,
-      bootloaderId: key.split("-").map((n) => Number(n)).filter((n) => Number.isFinite(n)),
-    })), []);
+      bootloaderId: bootloaderKey.split("-").map((n) => Number(n)).filter((n) => Number.isFinite(n)),
+    }))), []);
 
   useEffect(() => () => {
     clientRef.current?.disconnect().catch(() => {});
@@ -654,7 +654,7 @@ export default function KeypadFlasherApp() {
     const rememberedKey = (() => {
       const lastId = rememberedBootloaderId ?? lastBootloaderIdRef.current;
       const key = lastId ? lastId.join("-") : null;
-      return key && DEVICE_PROFILES[key] ? key : null;
+      return key && demoOptions.some((opt) => opt.key === key) ? key : null;
     })();
     const preferredDefault = demoOptions.find((opt) => opt.key === defaultDemoKey)?.key ?? null;
     const fallback = preferredDefault ?? demoOptions[0]?.key ?? null;

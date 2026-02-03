@@ -2,7 +2,7 @@
 
 The keypads supported by this project do not have an easy built-in way to enter bootloader mode, which is required to flash custom firmware onto them.
 
-I have developed a simple adapter that you can plug into the device in between the USB cable and the keypad that will allow you to easily enter bootloader mode without opening the device up. You can purchase them from eBay here: https://www.ebay.com/itm/168130551869
+I have developed a simple adapter that you can plug into the device in between the USB cable and the keypad that will allow you to easily enter bootloader mode without opening the device up. You can purchase them on eBay here: https://www.ebay.com/itm/168130551869
 
 For more information on the adapter and how it works, see the [Official adapter](#official-adapter) section below.
 
@@ -49,6 +49,8 @@ Remember that the bootloader will exit after 10 seconds without activity so you 
 ## Official adapter
 
 The official adapter works by shorting the D+ (data plus) USB line to VCC (power) through a 10k ohm resistor when the BOOT button is held. By holding the BOOT button and then pressing the RESET button, you can enter bootloader mode easily without opening the device up or having to hold anything while plugging the device in.
+
+If you wish to buy one, you can find them on eBay here: https://www.ebay.com/itm/168130551869
 
 Many thanks to [@dzid26](https://github.com/dzid26) for helping out with the design of this adapter.
 
