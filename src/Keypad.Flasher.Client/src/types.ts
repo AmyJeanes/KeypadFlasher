@@ -17,3 +17,21 @@ export type LedConfigurationDto = {
   breathingMinPercent: number;
   breathingStepMs: number;
 };
+
+export type StatusState =
+  | "idle"
+  | "requesting"
+  | "connectedKnown"
+  | "connectedUnknown"
+  | "compiling"
+  | "unsupported"
+  | "flashing"
+  | "flashDone"
+  | "compileError"
+  | "flashError"
+  | "fileApiMissing"
+  | "needConnect"
+  | "deviceLost"
+  | "error";
+
+export type Status = { state: StatusState; detail?: string };
