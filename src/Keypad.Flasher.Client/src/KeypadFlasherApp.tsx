@@ -11,20 +11,24 @@ import {
 } from "./lib/keypadConfigs";
 import { cloneLayout, loadConnectWizardHidden, loadLastDemoKey, saveConnectWizardHidden, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
 import { LayoutPreview } from "./components/LayoutPreview";
-import { LightingPreview } from "./components/LightingPreview";
 import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "./components/lightingStyles";
 import { ConnectSpinner } from "./components/ConnectSpinner";
 import { StatusBanner } from "./components/StatusBanner";
 import { StepEditor } from "./components/StepEditor";
 import { ConnectWizard } from "./components/ConnectWizard";
 import { ConnectWizardPrompt } from "./components/ConnectWizardPrompt";
+import { DemoDeviceModal } from "./components/modals/DemoDeviceModal";
+import { ExportConfigModal } from "./components/modals/ExportConfigModal";
+import { GlobalLightingModal } from "./components/modals/GlobalLightingModal";
+import { ImportConfigModal } from "./components/modals/ImportConfigModal";
+import { KeyLightingModal } from "./components/modals/KeyLightingModal";
 import { useModalClosing } from "./hooks/useModalClosing";
 import { useBootloaderConnection } from "./hooks/useBootloaderConnection";
 import { useConfigPersistence } from "./hooks/useConfigPersistence";
 import { useFirmwareFlashing, type DebugOptions as DebugOptionsDto } from "./hooks/useFirmwareFlashing";
 import { useConfigImportExport } from "./hooks/useConfigImportExport";
 import { useLightingState } from "./hooks/useLightingState";
-import type { EditTarget, LedConfigurationDto, LedColor, PassiveLedMode, ActiveLedMode, Status, LedPerKeyDto } from "./types";
+import type { EditTarget, LedConfigurationDto, LedColor, Status, LedPerKeyDto } from "./types";
 import "./styles/base.css";
 
 
@@ -64,175 +68,7 @@ export default function KeypadFlasherApp() {
   const [showWizardPrompt, setShowWizardPrompt] = useState<boolean>(false);
   const [connectSpinnerOpen, setConnectSpinnerOpen] = useState<boolean>(false);
   const [showConnectWizard, setShowConnectWizard] = useState<boolean>(false);
-  const modalPointerDownRef = useRef<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
-  const renderLightingBody = () => {
-    if (layoutLedCount === 0 || !draftLedConfig)
-    {
-      return <div className="muted small">This layout has no LEDs mapped.</div>;
-    }
-
-    const target = focusLedIndex != null ? focusLedIndex : 0;
-    const activeConfig = draftLedConfig;
-    const modalLedCount = activeConfig?.leds.length ?? 0;
-    if (target < 0 || target >= modalLedCount)
-    {
-      return <div className="muted small">LED out of range.</div>;
-    }
-
-    const targetLed = activeConfig.leds[target];
-    const passiveMode = targetLed.passiveMode;
-    const activeModeValue = targetLed.activeMode;
-    const modalActiveSolidEnabled = activeModeValue === "Solid";
-    const previewPassiveColor = targetLed.passiveColor;
-    const previewActiveColor = targetLed.activeColor;
-    const selectorRowStyle = { display: "grid", gridTemplateColumns: "140px minmax(160px, 220px)", alignItems: "center", gap: "10px 12px", width: "100%" } as const;
-    const pickerRowStyle = { display: "grid", gridTemplateColumns: "140px auto", alignItems: "center", gap: "10px 12px", width: "100%" } as const;
-    const sliderRowStyle = { display: "grid", gridTemplateColumns: "140px 1fr 72px", alignItems: "center", gap: "10px 12px", width: "100%" } as const;
-
-    return (
-      <div id={`led-card-${target}`} className="led-grid" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div className="muted small" style={{ marginBottom: "8px" }}>
-          Set the lighting modes and colors for this key.
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontWeight: 600 }}>Lighting preview</div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <LightingPreview
-              passiveMode={passiveMode}
-              passiveColor={previewPassiveColor}
-              activeMode={activeModeValue}
-              activeColor={previewActiveColor}
-              rainbowStepMs={targetLed.rainbowStepMs}
-              breathingMinPercent={targetLed.breathingMinPercent}
-              breathingStepMs={targetLed.breathingStepMs}
-              ledIndex={target}
-              size="md"
-              interactive
-              muted={false}
-            />
-            <div className="muted small" style={{ maxWidth: "340px" }}>
-              Hold to see active lighting, release to return to passive. Does not show global brightness. Updates live when settings change.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <div style={{ fontWeight: 600 }}>Passive lighting</div>
-            <div className="muted small">Shows when the key is idle.</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
-            <div style={selectorRowStyle}>
-              <span className="muted small">Passive</span>
-              <select
-                value={passiveMode}
-                onChange={(e) => setPassiveModeForLed(target, e.target.value as PassiveLedMode)}
-              >
-                <option value="Off">Off</option>
-                <option value="Rainbow">Rainbow</option>
-                <option value="Breathing">Breathing</option>
-                <option value="Static">Static</option>
-              </select>
-            </div>
-            {passiveMode === "Rainbow" && (
-              <label className="muted small" style={sliderRowStyle}>
-                <span>Rainbow step</span>
-                <input
-                  type="range"
-                    min={5}
-                    max={100}
-                  step={1}
-                  value={targetLed.rainbowStepMs}
-                  onChange={(e) => setRainbowStepMs(target, Number(e.target.value))}
-                />
-                <span style={{ textAlign: "right" }}>{targetLed.rainbowStepMs} ms</span>
-              </label>
-            )}
-            {passiveMode === "Breathing" && (
-              <div style={{ display: "grid", gap: "8px", width: "100%" }}>
-                <label className="muted small" style={pickerRowStyle}>
-                  <span>Color</span>
-                  <input
-                    type="color"
-                    value={colorToHex(targetLed.passiveColor)}
-                    onChange={(e) => setPassiveColor(target, hexToColor(e.target.value))}
-                  />
-                </label>
-                <label className="muted small" style={sliderRowStyle}>
-                  <span>Min brightness</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={80}
-                    value={targetLed.breathingMinPercent}
-                    onChange={(e) => setBreathingMinPercent(target, Number(e.target.value))}
-                  />
-                  <span style={{ textAlign: "right" }}>{targetLed.breathingMinPercent}%</span>
-                </label>
-                <label className="muted small" style={sliderRowStyle}>
-                  <span>Breathing step</span>
-                  <input
-                    type="range"
-                    min={5}
-                    max={100}
-                    step={1}
-                    value={targetLed.breathingStepMs}
-                    onChange={(e) => setBreathingStepMs(target, Number(e.target.value))}
-                  />
-                  <span style={{ textAlign: "right" }}>{targetLed.breathingStepMs} ms</span>
-                </label>
-              </div>
-            )}
-            {passiveMode === "Static" && (
-              <label className="muted small" style={pickerRowStyle}>
-                <span>Color</span>
-                <input
-                  type="color"
-                  value={colorToHex(targetLed.passiveColor)}
-                  onChange={(e) => setPassiveColor(target, hexToColor(e.target.value))}
-                />
-              </label>
-            )}
-            <div className="muted small" style={{ width: "100%" }}>
-              Lower step values run faster, higher step values slow the animations.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <div style={{ fontWeight: 600 }}>Active lighting</div>
-          <div className="muted small">Shows while the key is pressed.</div>
-        </div>
-        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-          <span className="muted small" style={{ minWidth: "56px" }}>Active</span>
-          <select
-            value={targetLed.activeMode}
-            onChange={(e) => setActiveMode(target, e.target.value as ActiveLedMode)}
-          >
-            <option value="Off">Off</option>
-            <option value="Nothing">Nothing</option>
-            <option value="Solid">Solid</option>
-          </select>
-          {modalActiveSolidEnabled && (
-            <input
-              type="color"
-              value={colorToHex(targetLed.activeColor)}
-              onChange={(e) => setActiveColor(target, hexToColor(e.target.value))}
-            />
-          )}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "12px" }}>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
-            <button className="btn" onClick={() => copyLedLighting(target, ledDisplayName(target))}>Copy</button>
-            <button className="btn" disabled={!copiedLedLighting} onClick={() => pasteLedLighting(target, ledDisplayName(target))}>Paste</button>
-              <button className="btn" onClick={() => applyLightingToAll(target, ledDisplayName(target))}>Apply to all</button>
-          </div>
-          <div style={{ minHeight: "18px", textAlign: "right" }}>
-            <span className="muted small">{lightingStatus}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
   const {
     ledConfig,
     setLedConfig,
@@ -585,21 +421,6 @@ export default function KeypadFlasherApp() {
       }
       return prev;
     });
-  };
-
-  const colorToHex = (color: LedColor): string => {
-    const toHex = (v: number) => v.toString(16).padStart(2, "0");
-    return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
-  };
-
-  const hexToColor = (hex: string): LedColor => {
-    const cleaned = (hex || "").replace("#", "");
-    if (cleaned.length !== 6) return { r: 255, g: 255, b: 255 };
-    const r = parseInt(cleaned.slice(0, 2), 16);
-    const g = parseInt(cleaned.slice(2, 4), 16);
-    const b = parseInt(cleaned.slice(4, 6), 16);
-    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return { r: 255, g: 255, b: 255 };
-    return { r, g, b };
   };
 
   const ledDisplayName = (idx: number): string => {
@@ -984,222 +805,76 @@ export default function KeypadFlasherApp() {
         )}
 
         {showDemoModal && (
-          <div
-            className={`modal-backdrop${demoModalClosingState ? " closing" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => {
-              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) requestDemoModalClose();
-            }}
-            onAnimationEnd={(e) => handleDemoModalAnimationEnd(e.animationName)}
-          >
-            <div
-              className={`modal config-modal demo-modal${demoModalClosingState ? " closing" : ""}`}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={() => { modalPointerDownRef.current = true; }}
-              onMouseUp={() => { modalPointerDownRef.current = false; }}
-              onAnimationEnd={(e) => handleDemoModalAnimationEnd(e.animationName)}
-            >
-              <div className="modal-header">
-                <div className="modal-title">Choose a demo device</div>
-              </div>
-              <div className="modal-body">
-                <p className="muted small">Pick a supported device profile to explore the UI without connecting hardware.</p>
-                {demoOptions.length === 0 ? (
-                  <div className="muted small">No demo devices available.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {demoOptions.map((opt) => (
-                      <label key={opt.key} className={`demo-option${selectedDemoKey === opt.key ? " demo-option-selected" : ""}`}>
-                        <input
-                          type="radio"
-                          name="demo-device"
-                          value={opt.key}
-                          checked={selectedDemoKey === opt.key}
-                          onChange={() => setSelectedDemoKey(opt.key)}
-                        />
-                        <div className="demo-option-body">
-                          <div className="demo-option-name">{opt.name}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="modal-actions">
-                <button className="btn" onClick={requestDemoModalClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleStartDemo} disabled={!selectedDemoKey || demoOptions.length === 0}>Start demo</button>
-              </div>
-            </div>
-          </div>
+          <DemoDeviceModal
+            closing={demoModalClosingState}
+            options={demoOptions}
+            selectedKey={selectedDemoKey}
+            onSelectKey={setSelectedDemoKey}
+            onStart={handleStartDemo}
+            onRequestClose={requestDemoModalClose}
+            onAnimationEnd={handleDemoModalAnimationEnd}
+          />
         )}
 
         {showGlobalLightingModal && (
-          <div
-            className={`modal-backdrop${globalLightingClosing ? " closing" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => {
-              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) requestGlobalLightingClose();
-            }}
-            onAnimationEnd={(e) => handleGlobalLightingAnimationEnd(e.animationName)}
-          >
-            <div
-              className={`modal lighting-modal${globalLightingClosing ? " closing" : ""}`}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={() => { modalPointerDownRef.current = true; }}
-              onMouseUp={() => { modalPointerDownRef.current = false; }}
-              onAnimationEnd={(e) => handleGlobalLightingAnimationEnd(e.animationName)}
-            >
-              <div className="modal-header">
-                <div className="modal-title">Global lighting</div>
-              </div>
-              <div className="modal-body">
-                {draftLedConfig ? (
-                  <div className="space-y-2">
-                    <div className="muted small">These settings apply to every button LED on the device.</div>
-                    <label className="muted small" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
-                      <span>Global brightness</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={draftLedConfig.brightnessPercent}
-                        onChange={(e) => setBrightnessPercent(Number(e.target.value))}
-                      />
-                      <span style={{ minWidth: "36px", textAlign: "right" }}>{draftLedConfig.brightnessPercent}%</span>
-                    </label>
-                    <div className="muted small">Brightness scales both passive and active effects together.</div>
-                  </div>
-                ) : (
-                  <div className="muted small">No lighting configuration available.</div>
-                )}
-              </div>
-              <div className="modal-actions">
-                <button className="btn" onClick={requestGlobalLightingClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveGlobalLightingModal} disabled={!draftLedConfig}>Save</button>
-              </div>
-            </div>
-          </div>
+          <GlobalLightingModal
+            closing={globalLightingClosing}
+            draftLedConfig={draftLedConfig}
+            onChangeBrightness={setBrightnessPercent}
+            onSave={saveGlobalLightingModal}
+            onRequestClose={requestGlobalLightingClose}
+            onAnimationEnd={handleGlobalLightingAnimationEnd}
+          />
         )}
 
         {showLightingModal && selectedLayout && (
-          <div
-            className={`modal-backdrop${lightingClosing ? " closing" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => {
-              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) requestLightingClose();
-            }}
-            onAnimationEnd={(e) => handleLightingAnimationEnd(e.animationName)}
-          >
-            <div
-              className={`modal lighting-modal${lightingClosing ? " closing" : ""}`}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={() => { modalPointerDownRef.current = true; }}
-              onMouseUp={() => { modalPointerDownRef.current = false; }}
-              onAnimationEnd={(e) => handleLightingAnimationEnd(e.animationName)}
-            >
-              <div className="modal-header">
-                {(() => {
-                  const target = focusLedIndex != null ? focusLedIndex : 0;
-                  const maxIdx = draftLedConfig?.leds.length ?? 0;
-                  const clamped = maxIdx > 0 ? Math.min(Math.max(target, 0), maxIdx - 1) : 0;
-                  const title = maxIdx > 0 ? `Edit ${ledDisplayName(clamped)} Lighting` : "Lighting";
-                  return <div className="modal-title">{title}</div>;
-                })()}
-              </div>
-              <div className="modal-body">
-                {renderLightingBody()}
-              </div>
-              <div className="modal-actions">
-                <button className="btn" onClick={requestLightingClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveLightingModal} disabled={!draftLedConfig}>Save</button>
-              </div>
-            </div>
-          </div>
+          <KeyLightingModal
+            closing={lightingClosing}
+            draftLedConfig={draftLedConfig}
+            layoutLedCount={layoutLedCount}
+            focusLedIndex={focusLedIndex}
+            lightingStatus={lightingStatus}
+            copiedLedLighting={Boolean(copiedLedLighting)}
+            onRequestClose={requestLightingClose}
+            onAnimationEnd={handleLightingAnimationEnd}
+            onSave={saveLightingModal}
+            setPassiveModeForLed={setPassiveModeForLed}
+            setPassiveColor={setPassiveColor}
+            setRainbowStepMs={setRainbowStepMs}
+            setBreathingMinPercent={setBreathingMinPercent}
+            setBreathingStepMs={setBreathingStepMs}
+            setActiveMode={setActiveMode}
+            setActiveColor={setActiveColor}
+            copyLedLighting={copyLedLighting}
+            pasteLedLighting={pasteLedLighting}
+            applyLightingToAll={applyLightingToAll}
+            ledDisplayName={ledDisplayName}
+          />
         )}
 
         {showExportModal && (
-          <div
-            className={`modal-backdrop${exportModalClosingState ? " closing" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => {
-              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) requestExportModalClose();
-            }}
-            onAnimationEnd={(e) => handleExportModalAnimationEnd(e.animationName)}
-          >
-            <div
-              className={`modal config-modal${exportModalClosingState ? " closing" : ""}`}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={() => { modalPointerDownRef.current = true; }}
-              onMouseUp={() => { modalPointerDownRef.current = false; }}
-              onAnimationEnd={(e) => handleExportModalAnimationEnd(e.animationName)}
-            >
-              <div className="modal-header">
-                <div className="modal-title">Export configuration</div>
-              </div>
-              <div className="modal-body">
-                <p className="muted small">Click the block to copy. This includes layout, bindings, and lighting.</p>
-                <pre
-                  className={`code-block clickable${exportCopyFlash ? " code-block-flash" : ""}`}
-                  onClick={handleExportCopy}
-                  title="Click to copy"
-                  aria-label="Exported configuration JSON"
-                >{exportText}</pre>
-                <div className="muted small" style={{ minHeight: "18px" }}>{exportCopyStatus}</div>
-              </div>
-              <div className="modal-actions">
-                <button className="btn" onClick={requestExportModalClose}>Close</button>
-              </div>
-            </div>
-          </div>
+          <ExportConfigModal
+            closing={exportModalClosingState}
+            exportText={exportText}
+            exportCopyFlash={exportCopyFlash}
+            exportCopyStatus={exportCopyStatus}
+            onCopy={handleExportCopy}
+            onRequestClose={requestExportModalClose}
+            onAnimationEnd={handleExportModalAnimationEnd}
+          />
         )}
 
         {showImportModal && (
-          <div
-            className={`modal-backdrop${importModalClosingState ? " closing" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => {
-              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) requestImportModalClose();
-            }}
-            onAnimationEnd={(e) => handleImportModalAnimationEnd(e.animationName)}
-          >
-            <div
-              className={`modal config-modal${importModalClosingState ? " closing" : ""}`}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={() => { modalPointerDownRef.current = true; }}
-              onMouseUp={() => { modalPointerDownRef.current = false; }}
-              onAnimationEnd={(e) => handleImportModalAnimationEnd(e.animationName)}
-            >
-              <div className="modal-header">
-                <div className="modal-title">Import configuration</div>
-              </div>
-              <div className="modal-body">
-                <p className="muted small">Paste an exported configuration below. It will replace the current layout, bindings, and lighting.</p>
-                <textarea
-                  className="code-block text-area"
-                  style={{ width: "100%", minHeight: "220px" }}
-                  ref={importTextAreaRef}
-                  value={importText}
-                  onChange={(e) => { setImportText(e.target.value); setImportError(""); }}
-                  placeholder="Paste configuration JSON here"
-                />
-                {importError && <div className="status-banner status-error" style={{ marginTop: "8px" }}><div className="status-title">Import error</div><div className="status-body">{importError}</div></div>}
-              </div>
-              <div className="modal-actions">
-                <button className="btn" onClick={requestImportModalClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={() => applyImportedConfig(importText)}>Import</button>
-              </div>
-            </div>
-          </div>
+          <ImportConfigModal
+            closing={importModalClosingState}
+            importText={importText}
+            importError={importError}
+            textAreaRef={importTextAreaRef}
+            onChangeText={(value) => { setImportText(value); setImportError(""); }}
+            onImport={() => applyImportedConfig(importText)}
+            onRequestClose={requestImportModalClose}
+            onAnimationEnd={handleImportModalAnimationEnd}
+          />
         )}
 
         {!webUsbAvailable && (
