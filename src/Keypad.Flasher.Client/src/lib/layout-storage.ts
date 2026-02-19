@@ -4,6 +4,7 @@ import type { LedConfigurationDto } from "../types";
 const STORAGE_PREFIX = "keypad-flasher";
 const LAST_DEVICE_KEY = `${STORAGE_PREFIX}:last-device`;
 const LAST_DEMO_KEY = `${STORAGE_PREFIX}:last-demo`;
+const CONNECT_WIZARD_HIDDEN_KEY = `${STORAGE_PREFIX}:connect-wizard-hidden`;
 const storageAvailable = typeof window !== "undefined" && !!window.localStorage;
 
 export type StoredConfig = { bindings: BindingProfileDto | null; layout: DeviceLayoutDto | null; ledConfig: LedConfigurationDto | null };
@@ -89,6 +90,26 @@ export const saveLastDemoKey = (key: string) => {
   if (!storageAvailable) return;
   try {
     window.localStorage.setItem(LAST_DEMO_KEY, JSON.stringify(key));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+export const loadConnectWizardHidden = (): boolean => {
+  if (!storageAvailable) return false;
+  try {
+    const raw = window.localStorage.getItem(CONNECT_WIZARD_HIDDEN_KEY);
+    return raw === "true";
+  } catch {
+    // ignore storage errors
+  }
+  return false;
+};
+
+export const saveConnectWizardHidden = (hidden: boolean) => {
+  if (!storageAvailable) return;
+  try {
+    window.localStorage.setItem(CONNECT_WIZARD_HIDDEN_KEY, hidden ? "true" : "false");
   } catch {
     // ignore storage errors
   }

@@ -1,6 +1,8 @@
 # KeypadFlasher
 
-This project contains custom firmware compatible with a number of different CH55x based programmable keypads found on sites like Aliexpress and Amazon.
+This project contains custom firmware compatible with a number of different CH55x based programmable keypads found on sites like AliExpress and Amazon.
+
+![](docs/img/keypads.jpg)
 
 ## Usage
 
@@ -12,11 +14,11 @@ Visit https://keypad-flasher.amyjeanes.com in a WebUSB compatible browser (anyth
 
 Please note that the original firmware on the device will be lost when you flash this custom firmware, so only proceed if you are okay with that.
 
-If you wish to help develop the project or add support for new keypads, please see the [development](docs/development.md) documentation.
+If you wish to help develop the project, please see the [development](docs/development.md) documentation.
 
 ## Supported devices
 
-The following is a list of tested and known compatible devices, but other devices using the CH55x series microcontrollers may also work.
+The following is a list of supported devices. Other CH55x based keypads may also be compatible but will need to be added to this project first. See the [developer instructions](docs/development.md#adding-support-for-new-keypads) for how to add support for new devices.
 
 They all have USB-C connectors unless otherwise noted:
 
@@ -27,7 +29,6 @@ They all have USB-C connectors unless otherwise noted:
 - [6 Keys 1 Knob](https://www.aliexpress.com/item/1005009812219099.html?spm=a2g0o.order_detail.order_detail_item.3.6afff19cXlayc4)
 - [6 Keys 1 Knob (Sikai)](https://sikaicase.com/products/6key-usb-c-macro-programmable-keyboard-osu-one-handed-mechanical-keyboard-with-knobs-6-fully-programmable-keys-hotkeys-rgb-backlit-mini-keypad-for-pc-gamer-1)
 - [10 Keys](https://www.aliexpress.com/item/1005005509140217.html?spm=a2g0o.order_detail.order_detail_item.7.3c7af19cNrdJJB)
-  - Uses a Micro-USB connector, will need a Micro-USB to USB-C adapter and USB-C cable to use the bootloader adapter / contraption above
   - Uses fixed blue LEDs that are always on and cannot be controlled by the firmware
 
 ## Unsupported devices

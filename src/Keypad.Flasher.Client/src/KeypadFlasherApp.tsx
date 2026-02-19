@@ -19,9 +19,10 @@ import {
   type KnownDeviceProfile,
 } from "./lib/keypad-configs";
 import { normalizeIncomingStep } from "./lib/binding-utils";
-import { cloneLayout, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layout-storage";
+import { cloneLayout, loadConnectWizardHidden, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveConnectWizardHidden, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layout-storage";
 import { LayoutPreview } from "./components/LayoutPreview";
 import { LightingPreview } from "./components/LightingPreview";
+import { ConnectSpinner } from "./components/ConnectSpinner";
 import { StatusBanner } from "./components/StatusBanner";
 import { StepEditor } from "./components/StepEditor";
 import type { EditTarget, LedConfigurationDto, LedColor, PassiveLedMode, ActiveLedMode } from "./types";
@@ -67,7 +68,43 @@ type BootloaderConfig = {
   encoders: { id: number; press?: { bootloaderOnBoot: boolean; bootloaderChordMember: boolean } }[];
 };
 
-const unsupportedDevicesUrl = "https://github.com/AmyJeanes/KeypadFlasher#supported-devices";
+type ConnectWizardStep = { id: "keypad" | "windows-driver" | "bootloader" | "connect"; title: string };
+
+type ModalClosing = {
+  isClosing: boolean;
+  requestClose: () => void;
+  handleAnimationEnd: (animationName: string) => void;
+};
+
+function useModalClosing(isOpen: boolean, onClosed: () => void): ModalClosing {
+  const [isClosing, setIsClosing] = useState(false);
+  const pendingRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    pendingRef.current.clear();
+    setIsClosing(false);
+  }, [isOpen]);
+
+  const requestClose = useCallback(() => {
+    if (!isOpen || isClosing) return;
+    pendingRef.current = new Set(["modal-pop-out", "backdrop-fade-out"]);
+    setIsClosing(true);
+  }, [isClosing, isOpen]);
+
+  const handleAnimationEnd = useCallback((animationName: string) => {
+    if (!isClosing) return;
+    if (!pendingRef.current.has(animationName)) return;
+    pendingRef.current.delete(animationName);
+    if (pendingRef.current.size === 0) {
+      pendingRef.current.clear();
+      setIsClosing(false);
+      onClosed();
+    }
+  }, [isClosing, onClosed]);
+
+  return { isClosing, requestClose, handleAnimationEnd };
+}
 
 function validateFixedRows(rows: number[], buttonCount: number): { rows: number[]; error: string | null } {
   const total = rows.reduce((sum, n) => sum + n, 0);
@@ -237,8 +274,8 @@ const applyBootloaderConfigToLayout = (layout: DeviceLayoutDto, config: Bootload
 
 export default function KeypadFlasherApp() {
   const [status, setStatus] = useState<Status>({ state: "idle" });
-  const [connectedInfo, setConnectedInfo] = useState<ConnectedInfo | null>(null);
-  const [progress, setProgress] = useState<Progress>({ phase: "", current: 0, total: 0 });
+    const [connectedInfo, setConnectedInfo] = useState<ConnectedInfo | null>(null);
+    const [progress, setProgress] = useState<Progress>({ phase: "", current: 0, total: 0 });
   const renderLightingBody = () => {
     if (layoutLedCount === 0 || !draftLedConfig)
     {
@@ -451,6 +488,59 @@ export default function KeypadFlasherApp() {
   const clientRef = useRef<BootloaderClient | null>(null);
   const lastBootloaderIdRef = useRef<number[] | null>(null);
   const [hexDragOver, setHexDragOver] = useState(false);
+  const [showConnectWizard, setShowConnectWizard] = useState<boolean>(false);
+  const [connectWizardStep, setConnectWizardStep] = useState<number>(0);
+  const [wizardHidden, setWizardHidden] = useState<boolean>(() => loadConnectWizardHidden());
+  const [wizardShotPreview, setWizardShotPreview] = useState<{ src: string; alt: string; title: string } | null>(null);
+  const [showWizardPrompt, setShowWizardPrompt] = useState<boolean>(false);
+  const [wizardWarning, setWizardWarning] = useState<string | null>(null);
+
+  const isWizardShotPreviewOpen = wizardShotPreview != null;
+  const wizardPromptModal = useModalClosing(showWizardPrompt, useCallback(() => setShowWizardPrompt(false), []));
+  const connectWizardModal = useModalClosing(showConnectWizard, useCallback(() => {
+    setShowConnectWizard(false);
+    setWizardWarning(null);
+  }, []));
+  const wizardShotModal = useModalClosing(isWizardShotPreviewOpen, useCallback(() => setWizardShotPreview(null), []));
+  const demoModalClosing = useModalClosing(showDemoModal, useCallback(() => setShowDemoModal(false), []));
+  const globalLightingModalClosing = useModalClosing(showGlobalLightingModal, useCallback(() => {
+    setShowGlobalLightingModal(false);
+    setDraftLedConfig(null);
+  }, []));
+  const lightingModalClosing = useModalClosing(showLightingModal, useCallback(() => {
+    setShowLightingModal(false);
+    setDraftLedConfig(null);
+    setFocusLedIndex(null);
+    setLightingStatus(defaultLightingStatus);
+  }, [defaultLightingStatus]));
+  const exportModalClosing = useModalClosing(showExportModal, useCallback(() => setShowExportModal(false), []));
+  const importModalClosing = useModalClosing(showImportModal, useCallback(() => {
+    setShowImportModal(false);
+    setImportError("");
+  }, []));
+
+  const { isClosing: wizardPromptClosing, requestClose: requestWizardPromptClose, handleAnimationEnd: handleWizardPromptAnimationEnd } = wizardPromptModal;
+  const { isClosing: connectWizardClosing, requestClose: requestConnectWizardClose, handleAnimationEnd: handleConnectWizardAnimationEnd } = connectWizardModal;
+  const { isClosing: wizardShotClosing, requestClose: requestWizardShotClose, handleAnimationEnd: handleWizardShotAnimationEnd } = wizardShotModal;
+  const { isClosing: demoModalClosingState, requestClose: requestDemoModalClose, handleAnimationEnd: handleDemoModalAnimationEnd } = demoModalClosing;
+  const { isClosing: globalLightingClosing, requestClose: requestGlobalLightingClose, handleAnimationEnd: handleGlobalLightingAnimationEnd } = globalLightingModalClosing;
+  const { isClosing: lightingClosing, requestClose: requestLightingClose, handleAnimationEnd: handleLightingAnimationEnd } = lightingModalClosing;
+  const { isClosing: exportModalClosingState, requestClose: requestExportModalClose, handleAnimationEnd: handleExportModalAnimationEnd } = exportModalClosing;
+  const { isClosing: importModalClosingState, requestClose: requestImportModalClose, handleAnimationEnd: handleImportModalAnimationEnd } = importModalClosing;
+
+  const shouldShowConnectSpinner = status.state === "requesting" && !showConnectWizard;
+  const [connectSpinnerOpen, setConnectSpinnerOpen] = useState<boolean>(false);
+  const connectSpinnerModal = useModalClosing(connectSpinnerOpen, useCallback(() => setConnectSpinnerOpen(false), []));
+  const { isClosing: connectSpinnerClosing, requestClose: requestConnectSpinnerClose, handleAnimationEnd: handleConnectSpinnerAnimationEnd } = connectSpinnerModal;
+
+  const openWizardShotPreview = useCallback((src: string, alt: string, title: string) => {
+    setWizardShotPreview({ src, alt, title });
+  }, []);
+
+  const updateWizardHidden = useCallback((hidden: boolean) => {
+    setWizardHidden(hidden);
+    saveConnectWizardHidden(hidden);
+  }, []);
 
   const ledCountFromLayout = useCallback((layout: DeviceLayoutDto | null): number => {
     if (!layout) return 0;
@@ -511,6 +601,7 @@ export default function KeypadFlasherApp() {
 
   const webUsbAvailable = CH55xBootloader.isWebUsbAvailable();
   const secure = typeof window !== "undefined" ? window.isSecureContext : true;
+  const isWindows = typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent);
 
   const defaultDemoKey = "144-165-233-190"; // 6 Keys 1 Knob
 
@@ -521,6 +612,157 @@ export default function KeypadFlasherApp() {
       name: profile.name,
       bootloaderId: bootloaderKey.split("-").map((n) => Number(n)).filter((n) => Number.isFinite(n)),
     }))), []);
+
+  const connectWizardSteps: ConnectWizardStep[] = useMemo(() => {
+    const steps: ConnectWizardStep[] = [];
+    steps.push({ id: "keypad", title: "Get a keypad" });
+    if (isWindows) {
+      steps.push({ id: "windows-driver", title: "Install driver" });
+    }
+    steps.push({ id: "bootloader", title: "Enter bootloader mode" });
+    steps.push({ id: "connect", title: "Connect" });
+    return steps;
+  }, [isWindows]);
+
+  const bootloaderStepIndex = useMemo(
+    () => connectWizardSteps.findIndex((step) => step.id === "bootloader"),
+    [connectWizardSteps],
+  );
+  const connectStepIndex = useMemo(
+    () => connectWizardSteps.findIndex((step) => step.id === "connect"),
+    [connectWizardSteps],
+  );
+
+  const renderWizardStepBody = useCallback((step: ConnectWizardStep | null): ReactNode => {
+    if (!step) return null;
+    const renderWizardShot = (src: string, title: string) => (
+      <button
+        type="button"
+        className="wizard-shot"
+        onClick={() => openWizardShotPreview(src, title, title)}
+      >
+        <img src={src} alt={title} loading="lazy" />
+        <div className="wizard-shot-caption">{title}</div>
+      </button>
+    );
+    if (step.id === "keypad") {
+      return (
+        <div className="wizard-grid">
+          <div className="wizard-copy">
+            <p className="wizard-foreword">You will need to have a compatible keypad to use this project.</p>
+            <p className="wizard-foreword">If you don't have one yet, here are some tips to get the right one:</p>
+            <ul className="wizard-list">
+              <li>
+                <strong>Pick a supported device</strong>
+                <ul className="wizard-sublist">
+                  <li>Browse the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher#supported-devices" target="_blank" rel="noreferrer">supported devices list</a> to see all currently supported keypads</li>
+                  <li>Other keypads not on this list may be compatible, but will need to be added to this project first. See the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/development.md#adding-support-for-new-keypads" target="_blank" rel="noreferrer">developer instructions</a> for how to add support for new devices</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Avoid incompatible boards</strong>
+                <ul className="wizard-sublist">
+                  <li>Some keypads use incompatible boards such as the CH57x or CH32 microcontrollers</li>
+                  <li>See the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher#unsupported-devices" target="_blank" rel="noreferrer">unsupported devices</a> documentation for more information</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Lighting controls</strong>
+                <ul className="wizard-sublist">
+                  <li>Some keypads come with fixed or non-standard LEDs, so lighting controls may be limited on these devices</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Bootloader mode</strong>
+                <ul className="wizard-sublist">
+                  <li>You will need to be able to enter bootloader mode on your keypad to flash the firmware</li>
+                  <li>This is covered in more detail in the next step, but be aware before you get a keypad that you may need to purchase or build a bootloader adapter for most keypads</li>
+                  <li>An <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/bootloader.md#official-adapter" target="_blank" rel="noreferrer">official bootloader adapter</a> is available for purchase to make it as easy as possible to use</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+          <div className="wizard-placeholders">
+            {renderWizardShot("/img/keypads.jpg", "Examples of supported keypads")}
+          </div>
+        </div>
+      );
+    }
+    if (step.id === "windows-driver") {
+      return (
+        <div className="wizard-grid">
+          <div className="wizard-copy">
+            <p className="wizard-foreword">Windows requires a driver to be installed before the browser can recognize the device in bootloader mode. Linux / macOS devices do not require this step.</p>
+            <p>If you have already installed the driver please skip to the next step. You only need to install it once as a one-time setup for all keypads.</p>
+            <ol className="wizard-list">
+              <li>Download <a className="link" href="https://zadig.akeo.ie/" target="_blank" rel="noreferrer">Zadig</a> and open it. Administrative privileges may be required</li>
+              <li>Press <strong>Device → Create New Device</strong></li>
+              <li>Set name to "CH55x Bootloader" and the USB ID to <code>4348</code> <code>55E0</code></li>
+              <li>Ensure the WinUSB driver is selected, it should be by default anyway</li>
+              <li>Press <strong>Install Driver</strong>, this may take a few minutes</li>
+            </ol>
+          </div>
+          <div className="wizard-placeholders">
+            {renderWizardShot("/img/zadig-1.png", "Zadig driver setup part 1")}
+            {renderWizardShot("/img/zadig-2.png", "Zadig driver setup part 2")}
+          </div>
+        </div>
+      );
+    }
+
+    if (step.id === "bootloader") {
+      return (
+        <div className="wizard-grid">
+          <div className="wizard-copy">
+            <p className="wizard-foreword">Get the keypad into bootloader mode so the flasher can communicate with it.</p>
+            <ul className="wizard-list">
+              <li>
+                <strong>Keypad buttons</strong>
+                <ul className="wizard-sublist">
+                  <li>If you've flashed this firmware previously, you can use your configured bootloader buttons to enter bootloader mode easily</li>
+                  <li>The default configuration is to press the first dial (or button if no dial) while plugging in. If you have more than 2 buttons you can also press all of them at any time as well</li>
+                  <li>Check the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/bootloader.md#bootloader-buttons" target="_blank" rel="noreferrer">bootloader buttons guide</a> if you wish to customize the bootloader entry</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Use the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/bootloader.md#official-adapter" target="_blank" rel="noreferrer">official adapter</a> (recommended)</strong>
+                <ul className="wizard-sublist">
+                  <li>Connect the adapter to your device and the keypad to the adapter's USB receptacle</li>
+                  <li>Hold BOOT, tap RESET once, then release BOOT again</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Use built-in keypad jumpers</strong>
+                <ul className="wizard-sublist">
+                  <li>Some keypads have jumper pads that can be shorted to enter bootloader mode</li>
+                  <li>Check the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/bootloader.md#devices" target="_blank" rel="noreferrer">devices guide</a> to see if your keypad supports this and how to do it</li>
+                </ul>
+              </li>
+              <li>
+                <strong>DIY adapter</strong>
+                <ul className="wizard-sublist">
+                  <li>You can also build your own adapter to enter bootloader mode if you can't or prefer not to buy the official adapter for any reason</li>
+                  <li>This may also be a preferable option if you have electronics experience and most of the necessary parts already to hand</li>
+                  <li>See the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/bootloader.md#diy-adapter" target="_blank" rel="noreferrer">DIY adapter guide</a> for instructions on how to build one</li>
+                </ul>
+              </li>
+            </ul>
+            <div className="muted small">You will have about 10 seconds to connect after entering bootloader mode or you'll need to try again.</div>
+          </div>
+          <div className="wizard-placeholders">
+            {renderWizardShot("/img/bootloader-button.jpg", "Bootloader entry with adapter buttons")}
+            {renderWizardShot("/img/official-adapter.jpg", "Official CH55x bootloader adapter")}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="wizard-connect">
+        <ConnectSpinner inline />
+      </div>
+    );
+  }, [openWizardShotPreview]);
 
   useEffect(() => () => {
     clientRef.current?.disconnect().catch(() => {});
@@ -674,7 +916,7 @@ export default function KeypadFlasherApp() {
     }
 
     try {
-      setShowDemoModal(false);
+      requestDemoModalClose();
       setStatus({ state: "requesting", detail: "Starting demo…" });
       if (clientRef.current) {
         await clientRef.current.disconnect().catch(() => {});
@@ -701,13 +943,15 @@ export default function KeypadFlasherApp() {
     setShowDemoModal(true);
   }, [demoMode, disconnectClient]);
 
-  const handleConnect = useCallback(async () => {
+  const performConnect = useCallback(async (options?: { origin?: "wizard" | "direct" }) => {
+    const origin = options?.origin ?? "direct";
     if (!webUsbAvailable) {
       setStatus({ state: "error", detail: "WebUSB not available in this browser." });
       return;
     }
     try {
       setStatus({ state: "requesting" });
+      setWizardWarning(null);
       if (demoMode && clientRef.current) {
         await clientRef.current.disconnect().catch(() => {});
       }
@@ -721,9 +965,45 @@ export default function KeypadFlasherApp() {
       applyConnectedDevice(info, { source: "real", persistLastId: true });
     } catch (e) {
       const msg = normalizeUsbErrorMessage(String((e as Error).message ?? e));
+      if (origin === "wizard") {
+        const warning = msg.startsWith("No device selected")
+          ? "No device selected. Please make sure your device is in bootloader mode and try again."
+          : msg;
+        setWizardWarning(warning);
+        setConnectWizardStep(bootloaderStepIndex >= 0 ? bootloaderStepIndex : 0);
+        setShowConnectWizard(true);
+        setStatus({ state: "error", detail: msg });
+        return;
+      }
+      if (wizardHidden && msg.startsWith("No device selected")) {
+        setShowWizardPrompt(true);
+        setStatus({ state: "idle" });
+        return;
+      }
       setStatus({ state: "error", detail: msg });
     }
-  }, [webUsbAvailable, demoMode, applyConnectedDevice]);
+  }, [webUsbAvailable, demoMode, applyConnectedDevice, wizardHidden, bootloaderStepIndex]);
+
+  const openConnectWizard = useCallback(() => {
+    setWizardWarning(null);
+    setConnectWizardStep(0);
+    setShowConnectWizard(true);
+  }, []);
+
+  const handleConnectClick = useCallback(() => {
+    if (wizardHidden) {
+      void performConnect();
+      return;
+    }
+    openConnectWizard();
+  }, [wizardHidden, performConnect, openConnectWizard]);
+
+  const startWizardConnect = useCallback(() => {
+    setWizardWarning(null);
+    setShowConnectWizard(true);
+    setConnectWizardStep(connectStepIndex >= 0 ? connectStepIndex : 0);
+    void performConnect({ origin: "wizard" });
+  }, [connectStepIndex, performConnect]);
 
   const handleDisconnect = useCallback(async () => {
     await disconnectClient({ state: "idle" }, true);
@@ -1117,7 +1397,7 @@ export default function KeypadFlasherApp() {
       if (targetId) {
         saveStoredConfig(targetId, { bindings: next.bindings, layout: next.layout, ledConfig: next.ledConfig });
       }
-      setShowImportModal(false);
+      requestImportModalClose();
       setImportError("");
       showToast("Configuration imported", "success", 20000);
     } catch (err) {
@@ -1126,8 +1406,7 @@ export default function KeypadFlasherApp() {
   }, [parseImportedConfig, connectedInfo, rememberedBootloaderId, selectedLayout, showToast]);
 
   const closeGlobalLightingModal = () => {
-    setShowGlobalLightingModal(false);
-    setDraftLedConfig(null);
+    requestGlobalLightingClose();
   };
 
   const saveGlobalLightingModal = () => {
@@ -1146,10 +1425,7 @@ export default function KeypadFlasherApp() {
   };
 
   const closeLightingModal = () => {
-    setShowLightingModal(false);
-    setDraftLedConfig(null);
-    setFocusLedIndex(null);
-    setLightingStatus(defaultLightingStatus);
+    requestLightingClose();
   };
   const saveLightingModal = () => {
     if (draftLedConfig) {
@@ -1372,7 +1648,57 @@ export default function KeypadFlasherApp() {
     }
   })();
 
-        const statusProgress = progress.total > 0 ? progress : null;
+      const hasWizardSteps = connectWizardSteps.length > 0;
+      const wizardStepIndex = hasWizardSteps ? Math.min(connectWizardStep, connectWizardSteps.length - 1) : 0;
+      const activeWizardStep = hasWizardSteps ? connectWizardSteps[wizardStepIndex] : null;
+      const wizardHasPrev = wizardStepIndex > 0;
+      const wizardHasNext = wizardStepIndex < connectWizardSteps.length - 1;
+      const wizardConnectStep = activeWizardStep?.id === "connect";
+
+  const statusProgress = progress.total > 0 ? progress : null;
+
+  const wizardPrimaryLabel = (() => {
+    if (activeWizardStep?.id === "bootloader") return "Connect";
+    if (activeWizardStep?.id === "connect") return "Retry connect";
+    return wizardHasNext ? "Next" : "Connect";
+  })();
+
+  const handleWizardPrimary = () => {
+    if (activeWizardStep?.id === "bootloader" || activeWizardStep?.id === "connect") {
+      startWizardConnect();
+      return;
+    }
+    if (wizardHasNext) {
+      setWizardWarning(null);
+      setConnectWizardStep(Math.min(connectWizardSteps.length - 1, wizardStepIndex + 1));
+      return;
+    }
+    startWizardConnect();
+  };
+
+  useEffect(() => {
+    if ((status.state === "connectedKnown" || status.state === "connectedUnknown") && !wizardHidden) {
+      updateWizardHidden(true);
+    }
+  }, [status.state, wizardHidden, updateWizardHidden]);
+
+  useEffect(() => {
+    if (!showConnectWizard) return;
+    if (status.state === "connectedKnown" || status.state === "connectedUnknown") {
+      setWizardWarning(null);
+      requestConnectWizardClose();
+    }
+  }, [requestConnectWizardClose, showConnectWizard, status.state]);
+
+  useEffect(() => {
+    if (shouldShowConnectSpinner) {
+      setConnectSpinnerOpen(true);
+      return;
+    }
+    if (connectSpinnerOpen) {
+      requestConnectSpinnerClose();
+    }
+  }, [connectSpinnerOpen, requestConnectSpinnerClose, shouldShowConnectSpinner]);
 
   return (
     <div className="app-shell">
@@ -1395,7 +1721,7 @@ export default function KeypadFlasherApp() {
         </header>
 
         <div className="actions">
-          <button onClick={handleConnect} className="btn">Connect</button>
+          <button onClick={handleConnectClick} className="btn">Connect</button>
           {!demoMode && (
             <button
               onClick={handleDemoToggle}
@@ -1590,21 +1916,169 @@ export default function KeypadFlasherApp() {
           />
         )}
 
-        {showDemoModal && (
+        {showWizardPrompt && (
           <div
-            className="modal-backdrop"
+            className={`modal-backdrop${wizardPromptClosing ? " closing" : ""}`}
             role="dialog"
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) setShowDemoModal(false);
+              if (e.target === e.currentTarget) requestWizardPromptClose();
             }}
+            onAnimationEnd={(e) => handleWizardPromptAnimationEnd(e.animationName)}
           >
             <div
-              className="modal config-modal demo-modal"
+              className={`modal config-modal${wizardPromptClosing ? " closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={() => { modalPointerDownRef.current = true; }}
               onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleWizardPromptAnimationEnd(e.animationName)}
+            >
+              <div className="modal-header">
+                <div className="modal-title">Connection unsuccessful</div>
+              </div>
+              <div className="modal-body">
+                <p className="muted small">Would you like to open the connection wizard to troubleshoot the issue?</p>
+              </div>
+              <div className="modal-actions" style={{ justifyContent: "flex-end", gap: "8px" }}>
+                <button className="btn" onClick={requestWizardPromptClose}>Cancel</button>
+                <button className="btn btn-primary" onClick={() => { updateWizardHidden(false); openConnectWizard(); requestWizardPromptClose(); }}>Open wizard</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showConnectWizard && activeWizardStep && (
+          <div
+            className={`modal-backdrop${connectWizardClosing ? " closing" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => {
+              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
+              if (status.state === "requesting") return;
+              if (e.target === e.currentTarget) requestConnectWizardClose();
+            }}
+            onAnimationEnd={(e) => handleConnectWizardAnimationEnd(e.animationName)}
+          >
+            <div
+              className={`modal config-modal setup-wizard-modal${wizardConnectStep ? " setup-wizard-modal-connect" : ""}${connectWizardClosing ? " closing" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={() => { modalPointerDownRef.current = true; }}
+              onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleConnectWizardAnimationEnd(e.animationName)}
+            >
+              <div className="modal-header" style={{ alignItems: "flex-start" }}>
+                <div>
+                  <div className="modal-title">Connection wizard</div>
+                </div>
+              </div>
+
+              {wizardWarning && (
+                <div className="status-banner status-warn" style={{ margin: "10px 0 6px" }}>
+                  <div className="status-title">Connection failed</div>
+                  <div className="status-body">{wizardWarning}</div>
+                </div>
+              )}
+
+              <div className="wizard-steps" aria-hidden="true">
+                {connectWizardSteps.map((step, idx) => (
+                  <button
+                    key={step.id}
+                    className={`wizard-step${idx === wizardStepIndex ? " wizard-step-active" : ""}`}
+                    onClick={() => {
+                      setWizardWarning(null);
+                      setConnectWizardStep(idx);
+                      if (step.id === "connect" && status.state !== "requesting") {
+                        startWizardConnect();
+                      }
+                    }}
+                    type="button"
+                  >
+                    <div className="wizard-step-index">{idx + 1}</div>
+                    <div className="wizard-step-title">{step.title}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="modal-body wizard-body">
+                {renderWizardStepBody(activeWizardStep)}
+              </div>
+
+              <div className="wizard-footer">
+                <div className="wizard-actions" style={{ width: "100%", justifyContent: "flex-end" }}>
+                  <button className="btn" onClick={requestConnectWizardClose}>Cancel</button>
+                  <button
+                    className="btn"
+                    disabled={!wizardHasPrev}
+                    onClick={() => {
+                      setWizardWarning(null);
+                      setConnectWizardStep(Math.max(0, wizardStepIndex - 1));
+                    }}
+                  >Previous</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleWizardPrimary}
+                    disabled={status.state === "requesting"}
+                  >{wizardPrimaryLabel}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {wizardShotPreview && (
+          <div
+            className={`modal-backdrop${wizardShotClosing ? " closing" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => {
+              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
+              if (e.target === e.currentTarget) requestWizardShotClose();
+            }}
+            onAnimationEnd={(e) => handleWizardShotAnimationEnd(e.animationName)}
+          >
+            <div
+              className={`modal wizard-lightbox${wizardShotClosing ? " closing" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={() => { modalPointerDownRef.current = true; }}
+              onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleWizardShotAnimationEnd(e.animationName)}
+            >
+              <img src={wizardShotPreview.src} alt={wizardShotPreview.alt} />
+              <div className="wizard-lightbox-footer">
+                <div className="wizard-lightbox-title">{wizardShotPreview.title}</div>
+                <div className="wizard-actions" style={{ justifyContent: "flex-end" }}>
+                  <button className="btn" onClick={requestWizardShotClose}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(connectSpinnerOpen || connectSpinnerClosing) && (
+          <ConnectSpinner
+            closing={connectSpinnerClosing}
+            onAnimationEnd={handleConnectSpinnerAnimationEnd}
+          />
+        )}
+
+        {showDemoModal && (
+          <div
+            className={`modal-backdrop${demoModalClosingState ? " closing" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => {
+              if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
+              if (e.target === e.currentTarget) requestDemoModalClose();
+            }}
+            onAnimationEnd={(e) => handleDemoModalAnimationEnd(e.animationName)}
+          >
+            <div
+              className={`modal config-modal demo-modal${demoModalClosingState ? " closing" : ""}`}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={() => { modalPointerDownRef.current = true; }}
+              onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleDemoModalAnimationEnd(e.animationName)}
             >
               <div className="modal-header">
                 <div className="modal-title">Choose a demo device</div>
@@ -1633,7 +2107,7 @@ export default function KeypadFlasherApp() {
                 )}
               </div>
               <div className="modal-actions">
-                <button className="btn" onClick={() => setShowDemoModal(false)}>Cancel</button>
+                <button className="btn" onClick={requestDemoModalClose}>Cancel</button>
                 <button className="btn btn-primary" onClick={startDemo} disabled={!selectedDemoKey || demoOptions.length === 0}>Start demo</button>
               </div>
             </div>
@@ -1642,19 +2116,21 @@ export default function KeypadFlasherApp() {
 
         {showGlobalLightingModal && (
           <div
-            className="modal-backdrop"
+            className={`modal-backdrop${globalLightingClosing ? " closing" : ""}`}
             role="dialog"
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
               if (e.target === e.currentTarget) closeGlobalLightingModal();
             }}
+            onAnimationEnd={(e) => handleGlobalLightingAnimationEnd(e.animationName)}
           >
             <div
-              className="modal lighting-modal"
+              className={`modal lighting-modal${globalLightingClosing ? " closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={() => { modalPointerDownRef.current = true; }}
               onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleGlobalLightingAnimationEnd(e.animationName)}
             >
               <div className="modal-header">
                 <div className="modal-title">Global lighting</div>
@@ -1690,19 +2166,21 @@ export default function KeypadFlasherApp() {
 
         {showLightingModal && selectedLayout && (
           <div
-            className="modal-backdrop"
+            className={`modal-backdrop${lightingClosing ? " closing" : ""}`}
             role="dialog"
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
               if (e.target === e.currentTarget) closeLightingModal();
             }}
+            onAnimationEnd={(e) => handleLightingAnimationEnd(e.animationName)}
           >
             <div
-              className="modal lighting-modal"
+              className={`modal lighting-modal${lightingClosing ? " closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={() => { modalPointerDownRef.current = true; }}
               onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleLightingAnimationEnd(e.animationName)}
             >
               <div className="modal-header">
                 {(() => {
@@ -1726,19 +2204,21 @@ export default function KeypadFlasherApp() {
 
         {showExportModal && (
           <div
-            className="modal-backdrop"
+            className={`modal-backdrop${exportModalClosingState ? " closing" : ""}`}
             role="dialog"
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) setShowExportModal(false);
+              if (e.target === e.currentTarget) requestExportModalClose();
             }}
+            onAnimationEnd={(e) => handleExportModalAnimationEnd(e.animationName)}
           >
             <div
-              className="modal config-modal"
+              className={`modal config-modal${exportModalClosingState ? " closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={() => { modalPointerDownRef.current = true; }}
               onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleExportModalAnimationEnd(e.animationName)}
             >
               <div className="modal-header">
                 <div className="modal-title">Export configuration</div>
@@ -1754,7 +2234,7 @@ export default function KeypadFlasherApp() {
                 <div className="muted small" style={{ minHeight: "18px" }}>{exportCopyStatus}</div>
               </div>
               <div className="modal-actions">
-                <button className="btn" onClick={() => setShowExportModal(false)}>Close</button>
+                <button className="btn" onClick={requestExportModalClose}>Close</button>
               </div>
             </div>
           </div>
@@ -1762,19 +2242,21 @@ export default function KeypadFlasherApp() {
 
         {showImportModal && (
           <div
-            className="modal-backdrop"
+            className={`modal-backdrop${importModalClosingState ? " closing" : ""}`}
             role="dialog"
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) setShowImportModal(false);
+              if (e.target === e.currentTarget) requestImportModalClose();
             }}
+            onAnimationEnd={(e) => handleImportModalAnimationEnd(e.animationName)}
           >
             <div
-              className="modal config-modal"
+              className={`modal config-modal${importModalClosingState ? " closing" : ""}`}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={() => { modalPointerDownRef.current = true; }}
               onMouseUp={() => { modalPointerDownRef.current = false; }}
+              onAnimationEnd={(e) => handleImportModalAnimationEnd(e.animationName)}
             >
               <div className="modal-header">
                 <div className="modal-title">Import configuration</div>
@@ -1792,7 +2274,7 @@ export default function KeypadFlasherApp() {
                 {importError && <div className="status-banner status-error" style={{ marginTop: "8px" }}><div className="status-title">Import error</div><div className="status-body">{importError}</div></div>}
               </div>
               <div className="modal-actions">
-                <button className="btn" onClick={() => setShowImportModal(false)}>Cancel</button>
+                <button className="btn" onClick={requestImportModalClose}>Cancel</button>
                 <button className="btn btn-primary" onClick={() => applyImportedConfig(importText)}>Import</button>
               </div>
             </div>
@@ -1809,7 +2291,7 @@ export default function KeypadFlasherApp() {
           <div className="panel warn">
             <div>Connected device is not recognized as a supported layout.</div>
             <div>You can still flash debug firmware, or see supported devices.</div>
-            <a className="link" href={unsupportedDevicesUrl} target="_blank" rel="noreferrer">View supported devices</a>
+            <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher#supported-devices" target="_blank" rel="noreferrer">View supported devices</a>
           </div>
         )}
       </div>

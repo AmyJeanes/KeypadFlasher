@@ -28,6 +28,16 @@ Once you have achieved bootloader mode, if you are using Windows you'll need to 
 
 The web app should then be able to detect the device in bootloader mode and allow you to flash custom firmware onto it.
 
+## Bootloader buttons
+
+After you flash the custom firmware once (using the adapter or jumper method above), you can configure the keypad so you do not need the adapter again:
+
+- In the web app, open the **Layout** panel and click the **power** icon on any button or encoder press. That marks it as "bootloader on boot".
+- To enter bootloader later, unplug the keypad, hold that marked button, then plug it back in. Keep it held for a moment; if your device has LEDs they will briefly light before it jumps to the bootloader.
+- You can also create a bootloader chord by clicking the **link** icon on two or more buttons. Pressing all chord members together while the device is running will reboot straight into the bootloader without unplugging.
+
+These flags let you re-enter the bootloader whenever you need to update firmware, even if you do not have the physical adapter with you.
+
 ## Devices
 
 Please refer to [Supported devices](../README.md#supported-devices) for a list of compatible devices.
@@ -38,13 +48,26 @@ This device has two pads which are labeled "R12" which can be shorted together u
 
 ![](img/3key1knob-pins.jpg)
 
-## Driver
+## Windows Driver
 
-On Windows, you will need to install a driver for the CH55x bootloader to be recognised. You can use [Zadig](https://zadig.akeo.ie/) to install the "WinUSB" driver for the device (will likely show up as Unknown Device #1) when in bootloader mode.
+On Windows, you will need to install a driver for the CH55x bootloader to be recognised. You can use [Zadig](https://zadig.akeo.ie/) to install the "WinUSB" driver for the device. Note this application requires administrative privileges to run.
 
-Remember that the bootloader will exit after 10 seconds without activity so you will want to be quick when selecting the device and beginning driver installation. It's okay if the device disconnects after you've started the installation, just replug it in after it's done and it should work.
+Open Zadig, and click Device -> Create New Device
 
-![](img/zadig.png)
+![](img/zadig-1.png)
+
+Enter the following details and then press "Install Driver":
+- Name: CH55x Bootloader
+- Driver: WinUSB (should be selected by default)
+- USB ID: `4348` and `55E0`
+
+![](img/zadig-2.png)
+
+Once complete, it should show "The driver was installed successfully" and you should now be ready to connect from the web app when in bootloader mode.
+
+![](img/zadig-3.png)
+
+You can also verify this in Device Manager under "Universal Serial Bus devices" where it should show up as "CH55x Bootloader" when in bootloader mode. If it shows up as an "Unknown Device" or something similar, the driver may not have installed correctly so try installing it again.
 
 ## Official adapter
 
@@ -54,7 +77,7 @@ If you wish to buy one, you can find them on eBay here: https://www.ebay.com/itm
 
 Many thanks to [@dzid26](https://github.com/dzid26) for helping out with the design of this adapter.
 
-![](img/offiical-adapter.png)
+![](img/official-adapter.png)
 
 You can find the KiCad source files for the adapter in the [hardware](../hardware) directory.
 
