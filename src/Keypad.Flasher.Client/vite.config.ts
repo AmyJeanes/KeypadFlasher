@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -69,6 +70,13 @@ export default defineConfig(({ command }): UserConfig => {
     plugins: react(),
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.ts',
+      css: true,
+      clearMocks: true,
+      restoreMocks: true,
     },
     server: {
       proxy: {
