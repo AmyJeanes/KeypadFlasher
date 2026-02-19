@@ -1,4 +1,4 @@
-import type { BindingProfileDto, DeviceLayoutDto } from "./keypad-configs";
+import type { BindingProfileDto, DeviceLayoutDto } from "./keypadConfigs";
 import type { LedConfigurationDto } from "../types";
 
 const STORAGE_PREFIX = "keypad-flasher";

@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState, type MutableRefObject } from "react";
 import { applyBootloaderConfigToLayout, bootloaderConfigFromLayout, sameBootloaderId, validateBindingProfileCandidate, validateBootloaderConfigCandidate, validateLedConfigCandidate } from "../lib/configValidation";
-import { cloneLayout, saveStoredConfig } from "../lib/layout-storage";
-import type { ConnectedInfo } from "../lib/ch55x-bootloader";
-import type { BindingProfileDto, DeviceLayoutDto } from "../lib/keypad-configs";
+import { cloneLayout, saveStoredConfig } from "../lib/layoutStorage";
+import type { ConnectedInfo } from "../lib/ch55xBootloader";
+import type { BindingProfileDto, DeviceLayoutDto } from "../lib/keypadConfigs";
 import type { LedConfigurationDto, Status } from "../types";
 
 type UseConfigImportExportParams = {

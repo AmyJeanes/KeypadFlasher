@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { HidBindingDto, DeviceLayoutDto } from "../lib/keypad-configs";
-import { describeBinding } from "../lib/binding-utils";
+import type { HidBindingDto, DeviceLayoutDto } from "../lib/keypadConfigs";
+import { describeBinding } from "../lib/bindingUtils";
 import type { EditTarget, LedConfigurationDto } from "../types";
 import { LightingPreview } from "./LightingPreview";
 import "./LayoutPreview.css";

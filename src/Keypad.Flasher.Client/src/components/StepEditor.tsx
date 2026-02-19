@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { HidBindingDto, HidPointerType, HidStepDto } from "../lib/keypad-configs";
-import { HID_POINTER_TYPE } from "../lib/keypad-configs";
+import type { HidBindingDto, HidPointerType, HidStepDto } from "../lib/keypadConfigs";
+import { HID_POINTER_TYPE } from "../lib/keypadConfigs";
 import {
   DEFAULT_FUNCTION_POINTER,
   FUNCTIONS_WITH_VALUE,
@@ -13,7 +13,7 @@ import {
   captureKeyboardEventToKey,
   keyLabelFromCode,
   normalizeIncomingStep,
-} from "../lib/binding-utils";
+} from "../lib/bindingUtils";
 import type { EditTarget } from "../types";
 import "./StepEditor.css";
 

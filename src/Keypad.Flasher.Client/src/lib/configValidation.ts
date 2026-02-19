@@ -1,5 +1,5 @@
-import { normalizeIncomingStep } from "./binding-utils";
-import { cloneLayout } from "./layout-storage";
+import { normalizeIncomingStep } from "./bindingUtils";
+import { cloneLayout } from "./layoutStorage";
 import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "../components/lightingStyles";
 import type {
   BindingProfileDto,
@@ -7,7 +7,7 @@ import type {
   HidBindingDto,
   HidStepDto,
   KnownDeviceProfile,
-} from "./keypad-configs";
+} from "./keypadConfigs";
 import type { LedConfigurationDto, LedColor, PassiveLedMode, ActiveLedMode, LedPerKeyDto } from "../types";
 
 const requireNumber = (value: unknown, label: string): number => {

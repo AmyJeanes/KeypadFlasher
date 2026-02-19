@@ -8,7 +8,7 @@ import {
   type BootloaderClient,
   type ConnectedInfo,
   type Progress,
-} from "./lib/ch55x-bootloader";
+} from "./lib/ch55xBootloader";
 import {
   findProfileForBootloaderId,
   DEVICE_PROFILES,
@@ -17,9 +17,9 @@ import {
   type HidBindingDto,
   type HidStepDto,
   type KnownDeviceProfile,
-} from "./lib/keypad-configs";
+} from "./lib/keypadConfigs";
 import { sameBootloaderId } from "./lib/configValidation";
-import { clearStoredConfig, cloneLayout, loadConnectWizardHidden, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveConnectWizardHidden, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layout-storage";
+import { clearStoredConfig, cloneLayout, loadConnectWizardHidden, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveConnectWizardHidden, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
 import { LayoutPreview } from "./components/LayoutPreview";
 import { LightingPreview } from "./components/LightingPreview";
 import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "./components/lightingStyles";

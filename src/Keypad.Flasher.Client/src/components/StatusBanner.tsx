@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Progress } from "../lib/ch55x-bootloader";
+import type { Progress } from "../lib/ch55xBootloader";
 
 type StatusTone = "info" | "success" | "warn" | "error";
 

@@ -1,5 +1,5 @@
-import type { HidBindingDto, HidPointerType, HidStepDto } from "./keypad-configs";
-import { HID_POINTER_TYPE } from "./keypad-configs";
+import type { HidBindingDto, HidPointerType, HidStepDto } from "./keypadConfigs";
+import { HID_POINTER_TYPE } from "./keypadConfigs";
 
 export const FRIENDLY_FUNCTIONS: Record<string, string> = {
   hid_consumer_volume_up: "Volume Up",
