@@ -1379,19 +1379,19 @@ export default function KeypadFlasherApp() {
   const statusBanner: { tone: "info" | "success" | "warn" | "error"; title: string; body?: ReactNode; showSpinner?: boolean } | null = (() => {
     switch (status.state) {
       case "requesting":
-        return { tone: "info" as const, title: "Requesting device…", body: "Approve the WebUSB prompt to continue." };
+        return { tone: "info" as const, title: "Requesting device…", body: "Select a device from the browser popup" };
       case "connectedKnown":
-        return { tone: "success" as const, title: `Connected: ${status.detail ?? "Device detected"}`, body: "Ready to compile and flash." };
+        return { tone: "success" as const, title: `Connected: ${status.detail ?? "Device detected"}`, body: "Ready to compile and flash" };
       case "connectedUnknown":
-        return { tone: "warn" as const, title: "Device not recognized", body: "Use debug firmware or pick a supported layout." };
+        return { tone: "warn" as const, title: "Device not recognized", body: "Use debug firmware or pick a supported layout  " };
       case "compiling":
-        return { tone: "info" as const, title: "Compiling firmware…", body: status.detail ? `Building ${status.detail}.` : undefined, showSpinner: true };
+        return { tone: "info" as const, title: "Compiling firmware…", body: status.detail ? `Building ${status.detail}` : undefined, showSpinner: true };
       case "unsupported":
         return { tone: "warn" as const, title: "Unknown device", body: status.detail };
       case "flashing":
-        return { tone: "info" as const, title: "Flashing firmware…", body: "Keep the device connected until it finishes." };
+        return { tone: "info" as const, title: "Flashing firmware…", body: "Keep the device connected until it finishes" };
       case "flashDone":
-        return { tone: "success" as const, title: "Flash finished", body: "Reconnect the device before flashing again." };
+        return { tone: "success" as const, title: "Flash finished", body: "Reconnect the device before flashing again" };
       case "compileError":
         return {
           tone: "error" as const,

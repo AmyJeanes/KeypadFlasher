@@ -292,14 +292,27 @@ a {
   line-height: 1.3;
 }
 
+.wizard-body-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  transition: height 200ms ease, max-height 200ms ease;
+}
+
+.wizard-body-shell-scroll {
+  overflow-y: auto;
+}
+
 .wizard-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding-right: 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  min-height: 0;
+  padding-bottom: 10px;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .wizard-grid {

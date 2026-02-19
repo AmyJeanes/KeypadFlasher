@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ConnectSpinner } from "./ConnectSpinner";
 import { useModalClosing } from "../hooks/useModalClosing";
 import type { Status } from "../types";
@@ -22,6 +22,12 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
   const [connectWizardStep, setConnectWizardStep] = useState<number>(0);
   const [wizardWarning, setWizardWarning] = useState<string | null>(null);
   const [wizardShotPreview, setWizardShotPreview] = useState<WizardShot | null>(null);
+  const wizardBodyShellRef = useRef<HTMLDivElement | null>(null);
+  const wizardBodyContentRef = useRef<HTMLDivElement | null>(null);
+  const [wizardBodyHeight, setWizardBodyHeight] = useState<number | null>(null);
+  const [wizardBodyMaxHeight, setWizardBodyMaxHeight] = useState<number | null>(null);
+  const [wizardBodyOverflow, setWizardBodyOverflow] = useState<boolean>(false);
+  const wizardCancelByStepRef = useRef<boolean>(false);
 
   const connectWizardSteps: ConnectWizardStep[] = useMemo(() => {
     const steps: ConnectWizardStep[] = [];
@@ -66,6 +72,36 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
     if (activeWizardStep?.id === "connect") return "Retry connect";
     return wizardHasNext ? "Next" : "Connect";
   })();
+
+  useLayoutEffect(() => {
+    const shellEl = wizardBodyShellRef.current;
+    const contentEl = wizardBodyContentRef.current;
+    if (!shellEl || !contentEl || typeof ResizeObserver === "undefined") return undefined;
+
+    const calcMaxHeight = () => Math.max(260, Math.floor(window.innerHeight - 240));
+
+    const measure = () => {
+      const maxHeight = calcMaxHeight();
+      const contentHeight = contentEl.scrollHeight;
+      const nextHeight = Math.min(contentHeight, maxHeight);
+      setWizardBodyHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+      setWizardBodyMaxHeight((prev) => (prev === maxHeight ? prev : maxHeight));
+      setWizardBodyOverflow(contentHeight > maxHeight + 1);
+    };
+
+    measure();
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(contentEl);
+
+    const handleWindowResize = () => measure();
+    window.addEventListener("resize", handleWindowResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", handleWindowResize);
+    };
+  }, [activeWizardStep, isOpen]);
 
   const renderWizardStepBody = useCallback((step: ConnectWizardStep | null): ReactNode => {
     if (!step) return null;
@@ -132,7 +168,8 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
             <ol className="wizard-list">
               <li>Download <a className="link" href="https://zadig.akeo.ie/" target="_blank" rel="noreferrer">Zadig</a> and open it. Administrative privileges may be required</li>
               <li>Press <strong>Device → Create New Device</strong></li>
-              <li>Set name to "CH55x Bootloader" and the USB ID to <code>4348</code> <code>55E0</code></li>
+              <li>Set the name to "CH55x Bootloader"</li>
+              <li>Set USB ID to <code>4348</code> <code>55E0</code></li>
               <li>Ensure the WinUSB driver is selected, it should be by default anyway</li>
               <li>Press <strong>Install Driver</strong>, this may take a few minutes</li>
             </ol>
@@ -164,6 +201,7 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
                 <ul className="wizard-sublist">
                   <li>Connect the adapter to your device and the keypad to the adapter's USB receptacle</li>
                   <li>Hold BOOT, tap RESET once, then release BOOT again</li>
+                  <li>You can purchase it from <a className="link" href="https://www.ebay.com/itm/168130551869" target="_blank" rel="noreferrer">here</a> if you would like to buy one</li>
                 </ul>
               </li>
               <li>
@@ -171,6 +209,7 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
                 <ul className="wizard-sublist">
                   <li>Some keypads have jumper pads that can be shorted to enter bootloader mode</li>
                   <li>Check the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher/blob/main/docs/bootloader.md#devices" target="_blank" rel="noreferrer">devices guide</a> to see if your keypad supports this and how to do it</li>
+                  <li>If it does not, you will need to use the official adapter or build a DIY adapter</li>
                 </ul>
               </li>
               <li>
@@ -185,7 +224,7 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
             <div className="muted small">You will have about 10 seconds to connect after entering bootloader mode or you'll need to try again.</div>
           </div>
           <div className="wizard-placeholders">
-            {renderWizardShot("/img/bootloader-button.jpg", "Bootloader entry with adapter buttons")}
+            {renderWizardShot("/img/bootloader-button.jpg", "Entering the bootloader by holding the dial button while plugging in")}
             {renderWizardShot("/img/official-adapter.jpg", "Official CH55x bootloader adapter")}
           </div>
         </div>
@@ -200,6 +239,7 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
   }, []);
 
   const startWizardConnect = useCallback(async () => {
+    wizardCancelByStepRef.current = false;
     setWizardWarning(null);
     if (connectStepIndex >= 0) {
       setConnectWizardStep(connectStepIndex);
@@ -208,8 +248,14 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
       await onRequestConnect();
     } catch (err) {
       const warning = formatWizardWarning(String((err as Error)?.message ?? err));
+      if (wizardCancelByStepRef.current) {
+        wizardCancelByStepRef.current = false;
+        return;
+      }
       setWizardWarning(warning);
       setConnectWizardStep(bootloaderStepIndex >= 0 ? bootloaderStepIndex : 0);
+    } finally {
+      wizardCancelByStepRef.current = false;
     }
   }, [bootloaderStepIndex, connectStepIndex, onRequestConnect]);
 
@@ -284,6 +330,10 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
                   key={step.id}
                   className={`wizard-step${idx === wizardStepIndex ? " wizard-step-active" : ""}`}
                   onClick={() => {
+                    const cancellingConnectByStep = status.state === "requesting" && wizardConnectStep && step.id !== "connect";
+                    if (cancellingConnectByStep) {
+                      wizardCancelByStepRef.current = true;
+                    }
                     setWizardWarning(null);
                     setConnectWizardStep(idx);
                     if (step.id === "connect" && status.state !== "requesting") {
@@ -298,8 +348,17 @@ export function ConnectWizard({ isOpen, status, isWindows, onClose, onRequestCon
               ))}
             </div>
 
-            <div className="modal-body wizard-body">
-              {renderWizardStepBody(activeWizardStep)}
+            <div
+              className={`modal-body wizard-body-shell${wizardBodyOverflow ? " wizard-body-shell-scroll" : ""}`}
+              ref={wizardBodyShellRef}
+              style={{
+                height: wizardBodyHeight != null ? `${wizardBodyHeight}px` : undefined,
+                maxHeight: wizardBodyMaxHeight != null ? `${wizardBodyMaxHeight}px` : undefined,
+              }}
+            >
+              <div className="wizard-body" ref={wizardBodyContentRef}>
+                {renderWizardStepBody(activeWizardStep)}
+              </div>
             </div>
 
             <div className="wizard-footer">

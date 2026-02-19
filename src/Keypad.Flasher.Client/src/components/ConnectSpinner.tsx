@@ -21,7 +21,7 @@ export function ConnectSpinner({
         <div className="spinner-circle" />
       </div>
       <div className="connect-spinner-title">Requesting device…</div>
-      <div className="muted small connect-spinner-subtitle">Check the WebUSB popup and select your device to continue</div>
+      <div className="muted small connect-spinner-subtitle">Check the browser popup and select your device to continue</div>
       <div className="muted small connect-spinner-subtitle">Ensure the device is connected and in bootloader mode</div>
     </div>
   );
