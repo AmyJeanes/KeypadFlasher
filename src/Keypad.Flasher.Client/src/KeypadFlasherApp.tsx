@@ -1,16 +1,7 @@
 /// <reference types="w3c-web-usb" />
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { type ConnectedInfo, type Progress } from "./lib/ch55xBootloader";
 import {
-  CH55xBootloader,
-  FakeBootloader,
-  normalizeUsbErrorMessage,
-  parseIntelHexBrowser,
-  type BootloaderClient,
-  type ConnectedInfo,
-  type Progress,
-} from "./lib/ch55xBootloader";
-import {
-  findProfileForBootloaderId,
   DEVICE_PROFILES,
   type BindingProfileDto,
   type DeviceLayoutDto,
@@ -18,8 +9,7 @@ import {
   type HidStepDto,
   type KnownDeviceProfile,
 } from "./lib/keypadConfigs";
-import { sameBootloaderId } from "./lib/configValidation";
-import { clearStoredConfig, cloneLayout, loadConnectWizardHidden, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveConnectWizardHidden, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
+import { cloneLayout, loadConnectWizardHidden, loadLastDemoKey, saveConnectWizardHidden, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
 import { LayoutPreview } from "./components/LayoutPreview";
 import { LightingPreview } from "./components/LightingPreview";
 import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "./components/lightingStyles";
@@ -29,25 +19,14 @@ import { StepEditor } from "./components/StepEditor";
 import { ConnectWizard } from "./components/ConnectWizard";
 import { ConnectWizardPrompt } from "./components/ConnectWizardPrompt";
 import { useModalClosing } from "./hooks/useModalClosing";
+import { useBootloaderConnection } from "./hooks/useBootloaderConnection";
+import { useConfigPersistence } from "./hooks/useConfigPersistence";
+import { useFirmwareFlashing, type DebugOptions as DebugOptionsDto } from "./hooks/useFirmwareFlashing";
 import { useConfigImportExport } from "./hooks/useConfigImportExport";
 import { useLightingState } from "./hooks/useLightingState";
 import type { EditTarget, LedConfigurationDto, LedColor, PassiveLedMode, ActiveLedMode, Status, LedPerKeyDto } from "./types";
 import "./styles/base.css";
 
-type FirmwareRequestBody = {
-  layout: DeviceLayoutDto | null;
-  bindingProfile: BindingProfileDto | null;
-  debug: boolean;
-  ledConfig: LedConfigurationDto | null;
-  debugOptions: DebugOptionsDto | null;
-};
-
-type DebugOptionsDto = {
-  enableNoiseFilter: boolean;
-  enablePullups: boolean;
-  confirmSamples: number;
-  confirmDelayMs: number;
-};
 
 type Toast = { message: string; tone: "info" | "success" | "warn" | "error" };
 
@@ -63,8 +42,30 @@ function validateFixedRows(rows: number[], buttonCount: number): { rows: number[
 
 export default function KeypadFlasherApp() {
   const [status, setStatus] = useState<Status>({ state: "idle" });
-    const [connectedInfo, setConnectedInfo] = useState<ConnectedInfo | null>(null);
-    const [progress, setProgress] = useState<Progress>({ phase: "", current: 0, total: 0 });
+  const [progress, setProgress] = useState<Progress>({ phase: "", current: 0, total: 0 });
+  const [connectedInfo, setConnectedInfo] = useState<ConnectedInfo | null>(null);
+  const [demoMode, setDemoMode] = useState<boolean>(false);
+  const [selectedProfile, setSelectedProfile] = useState<KnownDeviceProfile | null>(null);
+  const [currentBindings, setCurrentBindings] = useState<BindingProfileDto | null>(null);
+  const [selectedLayout, setSelectedLayout] = useState<DeviceLayoutDto | null>(null);
+  const [editorTarget, setEditorTarget] = useState<EditTarget | null>(null);
+  const [editorBinding, setEditorBinding] = useState<HidBindingDto | null>(null);
+  const [stepClipboard, setStepClipboard] = useState<HidStepDto[] | null>(null);
+  const [showDemoModal, setShowDemoModal] = useState<boolean>(false);
+  const [lastDemoKey, setLastDemoKey] = useState<string | null>(() => loadLastDemoKey());
+  const [selectedDemoKey, setSelectedDemoKey] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [devMode, setDevMode] = useState<boolean>(false);
+  const [debugFirmware, setDebugFirmware] = useState<boolean>(false);
+  const defaultDebugOptions: DebugOptionsDto = { enableNoiseFilter: true, enablePullups: true, confirmSamples: 3, confirmDelayMs: 1 };
+  const classicDebugOptions: DebugOptionsDto = { enableNoiseFilter: false, enablePullups: false, confirmSamples: 1, confirmDelayMs: 0 };
+  const [debugOptions, setDebugOptions] = useState<DebugOptionsDto>(defaultDebugOptions);
+  const [wizardHidden, setWizardHidden] = useState<boolean>(() => loadConnectWizardHidden());
+  const [showWizardPrompt, setShowWizardPrompt] = useState<boolean>(false);
+  const [connectSpinnerOpen, setConnectSpinnerOpen] = useState<boolean>(false);
+  const [showConnectWizard, setShowConnectWizard] = useState<boolean>(false);
+  const modalPointerDownRef = useRef<boolean>(false);
+  const toastTimerRef = useRef<number | null>(null);
   const renderLightingBody = () => {
     if (layoutLedCount === 0 || !draftLedConfig)
     {
@@ -232,26 +233,6 @@ export default function KeypadFlasherApp() {
       </div>
     );
   };
-  const [demoMode, setDemoMode] = useState<boolean>(false);
-  const [devMode, setDevMode] = useState<boolean>(false);
-  const [debugFirmware, setDebugFirmware] = useState<boolean>(false);
-  const defaultDebugOptions: DebugOptionsDto = { enableNoiseFilter: true, enablePullups: true, confirmSamples: 3, confirmDelayMs: 1 };
-  const classicDebugOptions: DebugOptionsDto = { enableNoiseFilter: false, enablePullups: false, confirmSamples: 1, confirmDelayMs: 0 };
-  const [debugOptions, setDebugOptions] = useState<DebugOptionsDto>(defaultDebugOptions);
-  const [selectedProfile, setSelectedProfile] = useState<KnownDeviceProfile | null>(null);
-  const [rememberedBootloaderId, setRememberedBootloaderId] = useState<number[] | null>(null);
-  const [currentBindings, setCurrentBindings] = useState<BindingProfileDto | null>(null);
-  const [selectedLayout, setSelectedLayout] = useState<DeviceLayoutDto | null>(null);
-  const [editorTarget, setEditorTarget] = useState<EditTarget | null>(null);
-  const [editorBinding, setEditorBinding] = useState<HidBindingDto | null>(null);
-  const [stepClipboard, setStepClipboard] = useState<HidStepDto[] | null>(null);
-  const [showDemoModal, setShowDemoModal] = useState<boolean>(false);
-  const [lastDemoKey, setLastDemoKey] = useState<string | null>(() => loadLastDemoKey());
-  const [selectedDemoKey, setSelectedDemoKey] = useState<string | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
-  const modalPointerDownRef = useRef<boolean>(false);
-  const toastTimerRef = useRef<number | null>(null);
-
   const {
     ledConfig,
     setLedConfig,
@@ -284,31 +265,6 @@ export default function KeypadFlasherApp() {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     setToast({ message, tone });
     toastTimerRef.current = window.setTimeout(() => setToast(null), durationMs);
-  }, []);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const importTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
-  const clientRef = useRef<BootloaderClient | null>(null);
-  const lastBootloaderIdRef = useRef<number[] | null>(null);
-  const [hexDragOver, setHexDragOver] = useState(false);
-  const [showConnectWizard, setShowConnectWizard] = useState<boolean>(false);
-  const [wizardHidden, setWizardHidden] = useState<boolean>(() => loadConnectWizardHidden());
-  const [showWizardPrompt, setShowWizardPrompt] = useState<boolean>(false);
-  const demoModalClosing = useModalClosing(showDemoModal, useCallback(() => setShowDemoModal(false), []));
-  const globalLightingModalClosing = useModalClosing(showGlobalLightingModal, closeGlobalLightingModal);
-  const lightingModalClosing = useModalClosing(showLightingModal, closeLightingModal);
-  const { isClosing: demoModalClosingState, requestClose: requestDemoModalClose, handleAnimationEnd: handleDemoModalAnimationEnd } = demoModalClosing;
-  const { isClosing: globalLightingClosing, requestClose: requestGlobalLightingClose, handleAnimationEnd: handleGlobalLightingAnimationEnd } = globalLightingModalClosing;
-  const { isClosing: lightingClosing, requestClose: requestLightingClose, handleAnimationEnd: handleLightingAnimationEnd } = lightingModalClosing;
-
-  const shouldShowConnectSpinner = status.state === "requesting" && !showConnectWizard;
-  const [connectSpinnerOpen, setConnectSpinnerOpen] = useState<boolean>(false);
-  const connectSpinnerModal = useModalClosing(connectSpinnerOpen, useCallback(() => setConnectSpinnerOpen(false), []));
-  const { isClosing: connectSpinnerClosing, requestClose: requestConnectSpinnerClose, handleAnimationEnd: handleConnectSpinnerAnimationEnd } = connectSpinnerModal;
-
-  const updateWizardHidden = useCallback((hidden: boolean) => {
-    setWizardHidden(hidden);
-    saveConnectWizardHidden(hidden);
   }, []);
 
   const ledCountFromLayout = useCallback((layout: DeviceLayoutDto | null): number => {
@@ -365,6 +321,87 @@ export default function KeypadFlasherApp() {
   }, [ledCountFromLayout]);
 
   const {
+    rememberedBootloaderId,
+    lastBootloaderIdRef,
+    applyConnectedDevice,
+    restoreSavedConfig,
+  } = useConfigPersistence({
+    currentBindings,
+    selectedLayout,
+    setSelectedProfile,
+    setSelectedLayout,
+    setCurrentBindings,
+    setLedConfig,
+    pickLedConfigForLayout,
+    assertLedConfigMatchesLayout,
+    showToast,
+    setStatus,
+    connectedInfo,
+    ledConfig,
+    demoMode,
+  });
+
+  const {
+    clientRef,
+    webUsbAvailable,
+    secure,
+    isWindows,
+    performConnect,
+    handleDisconnect,
+    startDemo,
+  } = useBootloaderConnection({
+    status,
+    setStatus,
+    applyConnectedDevice,
+    restoreSavedConfig,
+    connectedInfo,
+    setConnectedInfo,
+    demoMode,
+    setDemoMode,
+    onDisconnected: () => setProgress({ phase: "", current: 0, total: 0 }),
+  });
+
+  const {
+    hexDragOver,
+    fileInputRef,
+    handleHexDragOver,
+    handleHexDragLeave,
+    handleHexDrop,
+    handleHexClick,
+    onHexFileChange,
+    compileAndFlash,
+  } = useFirmwareFlashing({
+    clientRef,
+    setStatus,
+    setProgress,
+    assertLedConfigMatchesLayout,
+    selectedLayout,
+    selectedProfile,
+    currentBindings,
+    ledConfig,
+    disconnectClient: () => handleDisconnect(),
+    debugFirmware,
+    debugOptions,
+  });
+
+  const importTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  const demoModalClosing = useModalClosing(showDemoModal, useCallback(() => setShowDemoModal(false), []));
+  const globalLightingModalClosing = useModalClosing(showGlobalLightingModal, closeGlobalLightingModal);
+  const lightingModalClosing = useModalClosing(showLightingModal, closeLightingModal);
+  const { isClosing: demoModalClosingState, requestClose: requestDemoModalClose, handleAnimationEnd: handleDemoModalAnimationEnd } = demoModalClosing;
+  const { isClosing: globalLightingClosing, requestClose: requestGlobalLightingClose, handleAnimationEnd: handleGlobalLightingAnimationEnd } = globalLightingModalClosing;
+  const { isClosing: lightingClosing, requestClose: requestLightingClose, handleAnimationEnd: handleLightingAnimationEnd } = lightingModalClosing;
+
+  const shouldShowConnectSpinner = status.state === "requesting" && !showConnectWizard;
+  const connectSpinnerModal = useModalClosing(connectSpinnerOpen, useCallback(() => setConnectSpinnerOpen(false), []));
+  const { isClosing: connectSpinnerClosing, requestClose: requestConnectSpinnerClose, handleAnimationEnd: handleConnectSpinnerAnimationEnd } = connectSpinnerModal;
+
+  const updateWizardHidden = useCallback((hidden: boolean) => {
+    setWizardHidden(hidden);
+    saveConnectWizardHidden(hidden);
+  }, []);
+
+  const {
     showExportModal,
     setShowExportModal,
     showImportModal,
@@ -404,10 +441,6 @@ export default function KeypadFlasherApp() {
   const { isClosing: exportModalClosingState, requestClose: requestExportModalClose, handleAnimationEnd: handleExportModalAnimationEnd } = exportModalClosing;
   const { isClosing: importModalClosingState, requestClose: requestImportModalClose, handleAnimationEnd: handleImportModalAnimationEnd } = importModalClosing;
 
-  const webUsbAvailable = CH55xBootloader.isWebUsbAvailable();
-  const secure = typeof window !== "undefined" ? window.isSecureContext : true;
-  const isWindows = typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent);
-
   const defaultDemoKey = "144-165-233-190"; // 6 Keys 1 Knob
 
   const demoOptions = useMemo(() => DEVICE_PROFILES
@@ -438,140 +471,6 @@ export default function KeypadFlasherApp() {
   }, [devMode, debugFirmware]);
 
   useEffect(() => {
-    const lastId = loadLastBootloaderId();
-    if (!lastId) return;
-    setRememberedBootloaderId(lastId);
-    const profile = findProfileForBootloaderId(lastId);
-    setSelectedProfile(profile);
-    const stored = loadStoredConfig(lastId);
-    const nextLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
-    const nextBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
-    try {
-      const pickedLedConfig = pickLedConfigForLayout(nextLayout, stored?.ledConfig ?? null);
-      const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
-      setSelectedLayout(nextLayout);
-      setCurrentBindings(nextBindings);
-      setLedConfig(validatedLedConfig);
-    } catch (err) {
-      clearStoredConfig(lastId);
-      const fallbackLayout = profile?.layout ? cloneLayout(profile.layout) : null;
-      const fallbackBindings = profile?.defaultBindings ?? null;
-      const pickedLedConfig = pickLedConfigForLayout(fallbackLayout, null);
-      const validatedLedConfig = assertLedConfigMatchesLayout(fallbackLayout, pickedLedConfig);
-      setSelectedLayout(fallbackLayout);
-      setCurrentBindings(fallbackBindings);
-      setLedConfig(validatedLedConfig);
-      showToast("Saved configuration was invalid and has been reset.", "warn", 5200);
-      setStatus({ state: "idle" });
-    }
-  }, [assertLedConfigMatchesLayout, pickLedConfigForLayout, showToast]);
-
-  const applyConnectedDevice = useCallback((info: ConnectedInfo, options: { source: "real" | "demo"; persistLastId: boolean }) => {
-    const previousId = lastBootloaderIdRef.current;
-    const sameDevice = sameBootloaderId(previousId, info.id);
-
-    if (options.persistLastId) {
-      lastBootloaderIdRef.current = info.id;
-    }
-
-    setConnectedInfo(info);
-    const profile = findProfileForBootloaderId(info.id);
-    setSelectedProfile(profile);
-
-    if (options.persistLastId) {
-      setRememberedBootloaderId(info.id);
-      saveLastBootloaderId(info.id);
-    }
-
-    const stored = loadStoredConfig(info.id);
-    try {
-      const loadedLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
-      const loadedBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
-      const nextLayout = (!sameDevice || !selectedLayout) ? loadedLayout : selectedLayout;
-      if (!sameDevice || !selectedLayout) {
-        setSelectedLayout(loadedLayout);
-      }
-      if (!sameDevice || !currentBindings) {
-        setCurrentBindings(loadedBindings);
-      }
-      const pickedLedConfig = pickLedConfigForLayout(nextLayout, stored?.ledConfig ?? null);
-      const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
-      setLedConfig(validatedLedConfig);
-    } catch (err) {
-      clearStoredConfig(info.id);
-      const fallbackLayout = profile?.layout ? cloneLayout(profile.layout) : null;
-      const fallbackBindings = profile?.defaultBindings ?? null;
-      const nextLayout = fallbackLayout;
-      setSelectedLayout(fallbackLayout);
-      setCurrentBindings(fallbackBindings);
-      const pickedLedConfig = pickLedConfigForLayout(nextLayout, null);
-      const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
-      setLedConfig(validatedLedConfig);
-      showToast("Saved configuration was invalid and has been reset.", "warn", 5200);
-      setStatus({ state: "idle" });
-    }
-
-    const detail = profile
-      ? `${options.source === "demo" ? "Demo: " : ""}${profile.name}`
-      : (options.source === "demo" ? "Demo device" : undefined);
-    setStatus(profile ? { state: "connectedKnown", detail } : { state: "connectedUnknown", detail });
-  }, [assertLedConfigMatchesLayout, currentBindings, pickLedConfigForLayout, selectedLayout, showToast]);
-
-  const restoreSavedConfig = useCallback(() => {
-    const id = rememberedBootloaderId ?? lastBootloaderIdRef.current;
-    if (!id) {
-      setSelectedProfile(null);
-      setSelectedLayout(null);
-      setCurrentBindings(null);
-      setLedConfig(null);
-      return;
-    }
-    const profile = findProfileForBootloaderId(id);
-    setSelectedProfile(profile);
-    const stored = loadStoredConfig(id);
-    const nextLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
-    const nextBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
-    try {
-      const pickedLedConfig = pickLedConfigForLayout(nextLayout, stored?.ledConfig ?? null);
-      const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
-      setSelectedLayout(nextLayout);
-      setCurrentBindings(nextBindings);
-      setLedConfig(validatedLedConfig);
-    } catch (err) {
-      clearStoredConfig(id);
-      const fallbackLayout = profile?.layout ? cloneLayout(profile.layout) : null;
-      const fallbackBindings = profile?.defaultBindings ?? null;
-      const pickedLedConfig = pickLedConfigForLayout(fallbackLayout, null);
-      const validatedLedConfig = assertLedConfigMatchesLayout(fallbackLayout, pickedLedConfig);
-      setSelectedLayout(fallbackLayout);
-      setCurrentBindings(fallbackBindings);
-      setLedConfig(validatedLedConfig);
-      showToast("Saved configuration was invalid and has been reset.", "warn", 5200);
-      setStatus({ state: "idle" });
-    }
-  }, [assertLedConfigMatchesLayout, pickLedConfigForLayout, rememberedBootloaderId, showToast]);
-
-  const disconnectClient = useCallback(async (nextStatus?: Status, reboot?: boolean) => {
-    const client = clientRef.current;
-    if (client) {
-      if (reboot) {
-        await client.runApplication().catch(() => {});
-      }
-      await client.disconnect().catch(() => {});
-    }
-    clientRef.current = null;
-    setDemoMode(false);
-    setConnectedInfo(null);
-    setProgress({ phase: "", current: 0, total: 0 });
-    restoreSavedConfig();
-    if (nextStatus) setStatus(nextStatus);
-  }, [restoreSavedConfig]);
-
-  const handlePassiveDisconnect = useCallback(async (detail?: string) => {
-    await disconnectClient({ state: "deviceLost", detail: detail ?? "Device disconnected. Reconnect to continue." });
-  }, [disconnectClient]);
-
-  useEffect(() => {
     if (!showDemoModal) return;
     const rememberedKey = (() => {
       const lastId = rememberedBootloaderId ?? lastBootloaderIdRef.current;
@@ -588,269 +487,36 @@ export default function KeypadFlasherApp() {
     });
   }, [showDemoModal, rememberedBootloaderId, demoOptions, lastDemoKey, defaultDemoKey]);
 
-  const startDemo = useCallback(async () => {
-    const chosen = demoOptions.find((opt) => opt.key === selectedDemoKey) ?? demoOptions[0];
-    if (!chosen) {
-      setStatus({ state: "error", detail: "No demo devices available." });
-      return;
-    }
-
-    try {
-      requestDemoModalClose();
-      setStatus({ state: "requesting", detail: "Starting demo…" });
-      if (clientRef.current) {
-        await clientRef.current.disconnect().catch(() => {});
-      }
-      const client = new FakeBootloader({ bootloaderId: chosen.bootloaderId });
-      clientRef.current = client;
-      const info = await client.connect();
-      setDemoMode(true);
-      setLastDemoKey(chosen.key);
-      saveLastDemoKey(chosen.key);
-      applyConnectedDevice(info, { source: "demo", persistLastId: false });
-    } catch (err) {
-      clientRef.current = null;
-      setDemoMode(false);
-      setStatus({ state: "error", detail: String((err as Error).message ?? "Failed to start demo mode.") });
-    }
-  }, [applyConnectedDevice, demoOptions, selectedDemoKey]);
-
   const handleDemoToggle = useCallback(async () => {
     if (demoMode) {
-      await disconnectClient({ state: "idle" });
+      await handleDisconnect(true);
       return;
     }
     setShowDemoModal(true);
-  }, [demoMode, disconnectClient]);
+  }, [demoMode, handleDisconnect]);
 
-  const performConnect = useCallback(async (options?: { origin?: "wizard" | "direct" }) => {
-    const origin = options?.origin ?? "direct";
-    if (!webUsbAvailable) {
-      setStatus({ state: "error", detail: "WebUSB not available in this browser." });
-      return;
-    }
-    try {
-      setStatus({ state: "requesting" });
-      if (demoMode && clientRef.current) {
-        await clientRef.current.disconnect().catch(() => {});
-      }
-
-      const existing = clientRef.current;
-      const client = existing instanceof CH55xBootloader ? existing : new CH55xBootloader();
-      clientRef.current = client;
-
-      setDemoMode(false);
-      const info = await client.connect();
-      applyConnectedDevice(info, { source: "real", persistLastId: true });
-    } catch (e) {
-      const msg = normalizeUsbErrorMessage(String((e as Error).message ?? e));
-      if (origin === "wizard") {
-        setStatus({ state: "error", detail: msg });
-        throw new Error(msg);
-      }
-      if (wizardHidden && msg.startsWith("No device selected")) {
-        setShowWizardPrompt(true);
-        setStatus({ state: "idle" });
-        return;
-      }
-      setStatus({ state: "error", detail: msg });
-    }
-  }, [webUsbAvailable, demoMode, applyConnectedDevice, wizardHidden]);
-
-  const openConnectWizard = useCallback(() => {
-    setShowConnectWizard(true);
-  }, []);
+  const openConnectWizard = useCallback(() => setShowConnectWizard(true), []);
 
   const handleConnectClick = useCallback(() => {
     if (wizardHidden) {
-      void performConnect();
+      void performConnect({ wizardHidden, onShowWizardPrompt: () => setShowWizardPrompt(true) });
       return;
     }
     openConnectWizard();
-  }, [wizardHidden, performConnect, openConnectWizard]);
+  }, [performConnect, wizardHidden, openConnectWizard]);
 
   const handleWizardConnect = useCallback(async () => {
-    await performConnect({ origin: "wizard" });
-  }, [performConnect]);
+    await performConnect({ origin: "wizard", wizardHidden, onShowWizardPrompt: () => setShowWizardPrompt(true) });
+  }, [performConnect, wizardHidden]);
 
-  const handleDisconnect = useCallback(async () => {
-    await disconnectClient({ state: "idle" }, true);
-  }, [disconnectClient]);
-
-  const flashBytes = useCallback(async (bytes: Uint8Array) => {
-    const client = clientRef.current;
-    if (!client) {
-      setStatus({ state: "needConnect" });
-      return;
-    }
-
-    try {
-      setStatus({ state: "flashing" });
-      await client.flashBinary(bytes, (p) => setProgress(p));
-      setStatus({ state: "flashDone" });
-      await disconnectClient();
-    } catch (e) {
-      setStatus({ state: "flashError", detail: String((e as Error).message ?? e) });
-    } finally {
-      setProgress({ phase: "", current: 0, total: 0 });
-    }
-  }, [disconnectClient]);
-
-  useEffect(() => {
-    if (demoMode) return;
-    const targetId = connectedInfo?.id ?? rememberedBootloaderId ?? lastBootloaderIdRef.current;
-    if (!targetId) return;
-    saveStoredConfig(targetId, { bindings: currentBindings, layout: selectedLayout, ledConfig });
-  }, [connectedInfo, rememberedBootloaderId, currentBindings, selectedLayout, ledConfig, demoMode]);
-
-  useEffect(() => {
-    if (!webUsbAvailable || typeof navigator === "undefined" || !navigator.usb) return;
-    const onUsbDisconnect = (event: USBConnectionEvent) => {
-      const connected = clientRef.current?.getConnectedDevice();
-      if (!connected) return;
-      const sameDevice = event.device === connected
-        || (event.device.vendorId === connected.vendorId && event.device.productId === connected.productId && event.device.serialNumber === connected.serialNumber);
-      if (sameDevice) {
-        void handlePassiveDisconnect("Device disconnected. Reconnect to continue.");
-      }
-    };
-    navigator.usb.addEventListener("disconnect", onUsbDisconnect);
-    return () => navigator.usb.removeEventListener("disconnect", onUsbDisconnect);
-  }, [webUsbAvailable, handlePassiveDisconnect]);
-
-  useEffect(() => {
-    if (demoMode) return;
-    if (!connectedInfo || !clientRef.current) return;
-    if (status.state === "flashing" || status.state === "compiling" || status.state === "requesting") return;
-    let cancelled = false;
-    const intervalId = window.setInterval(async () => {
-      if (cancelled) return;
-      try {
-        await clientRef.current?.ping();
-      } catch {
-        if (cancelled) return;
-        await handlePassiveDisconnect("Device became inactive. Reconnect to continue.");
-      }
-    }, 15000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [connectedInfo, status.state, handlePassiveDisconnect, demoMode]);
-
-  const handleHexDragOver = useCallback((event: DragEvent) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    if (!hexDragOver) setHexDragOver(true);
-  }, [hexDragOver]);
-
-  const handleHexDragLeave = useCallback((event: DragEvent) => {
-    event.preventDefault();
-    if (hexDragOver) setHexDragOver(false);
-  }, [hexDragOver]);
-
-  const processHexFile = useCallback(async (file: File) => {
-    try {
-      const text = await file.text();
-      const { data } = parseIntelHexBrowser(text, 63 * 1024);
-      await flashBytes(data);
-    } catch (err) {
-      setStatus({ state: "flashError", detail: String((err as Error).message ?? err) });
-    }
-  }, [flashBytes]);
-
-  const handleHexDrop = useCallback(async (event: DragEvent) => {
-    event.preventDefault();
-    setHexDragOver(false);
-    if (!clientRef.current) {
-      setStatus({ state: "needConnect" });
-      return;
-    }
-    const file = event.dataTransfer?.files?.[0];
-    if (!file) return;
-    await processHexFile(file);
-  }, [processHexFile]);
-
-  const handleHexClick = useCallback(() => {
-    if (!clientRef.current) {
-      setStatus({ state: "needConnect" });
-      return;
-    }
-    if (!window.File || !window.FileReader || !window.FileList || !window.Blob) {
-      setStatus({ state: "fileApiMissing" });
-      return;
-    }
-    fileInputRef.current?.click();
-  }, []);
-
-  const onHexFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    await processHexFile(file);
-    event.target.value = "";
-  }, [processHexFile]);
-
-  const compileAndFlash = useCallback(async () => {
-    if (!selectedLayout && !debugFirmware) {
-      setStatus({ state: "unsupported", detail: "Device not recognized. Use debug firmware or check supported layouts." });
-      return;
-    }
-
-    if (selectedLayout && !currentBindings) {
-      setStatus({ state: "unsupported", detail: "Bindings missing for detected layout." });
-      return;
-    }
-
-    try {
-      setStatus({ state: "compiling", detail: debugFirmware ? "Debug firmware" : selectedProfile?.name });
-      const requestLedConfig = debugFirmware ? null : assertLedConfigMatchesLayout(selectedLayout, ledConfig);
-      const sanitizedDebugOptions: DebugOptionsDto = {
-        enableNoiseFilter: debugOptions.enableNoiseFilter,
-        enablePullups: debugOptions.enablePullups,
-        confirmSamples: Math.max(1, Math.min(255, Math.round(debugOptions.confirmSamples))),
-        confirmDelayMs: Math.max(0, Math.min(255, Math.round(debugOptions.confirmDelayMs))),
-      };
-      const payload: FirmwareRequestBody = debugFirmware
-        ? { layout: null, bindingProfile: null, debug: true, ledConfig: null, debugOptions: sanitizedDebugOptions }
-        : { layout: selectedLayout, bindingProfile: currentBindings, debug: false, ledConfig: requestLedConfig, debugOptions: null };
-
-      const resp = await fetch("flasher", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      let respBody: { error?: string; exitCode?: number; stdout?: string; stderr?: string; fileBytes?: string; } = {};
-      const contentType = resp.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        try { respBody = await resp.json(); } catch { /* ignore parse errors */ }
-      } else if (resp.ok) {
-        respBody = await resp.json().catch(() => null);
-      }
-
-      if (!resp.ok) {
-        if (respBody && respBody.error) {
-          const exitCode = respBody.exitCode != null ? ` (exit ${respBody.exitCode})` : "";
-          const stdout = respBody.stdout ? `\n--- stdout ---\n${respBody.stdout.trim()}` : "";
-          const stderr = respBody.stderr ? `\n--- stderr ---\n${respBody.stderr.trim()}` : "";
-          setStatus({ state: "compileError", detail: `Compile failed${exitCode}: ${respBody.error}${stdout}${stderr}` });
-          return;
-        }
-        throw new Error(`Compile failed: ${resp.status} ${resp.statusText}`);
-      }
-
-      if (!respBody || !respBody.fileBytes) {
-        throw new Error("Unexpected compile response format.");
-      }
-
-      const base64: string = respBody.fileBytes;
-      const text = atob(base64);
-      const { data } = parseIntelHexBrowser(text, 63 * 1024);
-      await flashBytes(data);
-    } catch (err) {
-      setStatus({ state: "compileError", detail: String((err as Error).message ?? err) });
-    }
-  }, [assertLedConfigMatchesLayout, flashBytes, debugFirmware, debugOptions, selectedLayout, selectedProfile, currentBindings, ledConfig]);
+  const handleStartDemo = useCallback(async () => {
+    await startDemo({
+      selectedDemoKey,
+      demoOptions,
+      rememberDemoKey: (key) => { setLastDemoKey(key); saveLastDemoKey(key); },
+      onBeforeStart: () => requestDemoModalClose(),
+    });
+  }, [demoOptions, requestDemoModalClose, selectedDemoKey, startDemo]);
 
   const unsupportedDevice = connectedInfo != null && selectedProfile == null;
   const userButtons = selectedLayout ? selectedLayout.buttons : [];
@@ -1113,7 +779,7 @@ export default function KeypadFlasherApp() {
             </button>
           )}
           {connectedInfo && (
-            <button onClick={handleDisconnect} className="btn">Disconnect</button>
+            <button onClick={() => void handleDisconnect(true)} className="btn">Disconnect</button>
           )}
           {devMode && (
             <>
@@ -1363,7 +1029,7 @@ export default function KeypadFlasherApp() {
               </div>
               <div className="modal-actions">
                 <button className="btn" onClick={requestDemoModalClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={startDemo} disabled={!selectedDemoKey || demoOptions.length === 0}>Start demo</button>
+                <button className="btn btn-primary" onClick={handleStartDemo} disabled={!selectedDemoKey || demoOptions.length === 0}>Start demo</button>
               </div>
             </div>
           </div>
