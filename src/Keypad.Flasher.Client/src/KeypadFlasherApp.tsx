@@ -11,16 +11,11 @@ import {
 import { cloneLayout, loadLastDemoKey, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
 import { LayoutPreview } from "./components/LayoutPreview";
 import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "./components/lightingStyles";
-import { ConnectSpinner } from "./components/ConnectSpinner";
 import { StatusBanner } from "./components/StatusBanner";
 import { StepEditor } from "./components/StepEditor";
-import { ConnectWizard } from "./components/ConnectWizard";
-import { ConnectWizardPrompt } from "./components/ConnectWizardPrompt";
-import { DemoDeviceModal } from "./components/modals/DemoDeviceModal";
-import { ExportConfigModal } from "./components/modals/ExportConfigModal";
-import { GlobalLightingModal } from "./components/modals/GlobalLightingModal";
-import { ImportConfigModal } from "./components/modals/ImportConfigModal";
-import { KeyLightingModal } from "./components/modals/KeyLightingModal";
+import { ActionBar } from "./components/ActionBar";
+import { DevToolsPanel } from "./components/DevToolsPanel";
+import { ModalsHost } from "./components/ModalsHost";
 import { useModalClosing } from "./hooks/useModalClosing";
 import { useBootloaderConnection } from "./hooks/useBootloaderConnection";
 import { useConfigPersistence } from "./hooks/useConfigPersistence";
@@ -474,117 +469,36 @@ export default function KeypadFlasherApp() {
           </p>
         </header>
 
-        <div className="actions">
-          <button onClick={handleConnectClick} className="btn">Connect</button>
-          {!demoMode && (
-            <button
-              onClick={handleDemoToggle}
-              className="btn btn-demo"
-              disabled={Boolean(connectedInfo)}
-              title="Start demo mode to explore the UI without connecting a real device."
-            >
-              Start Demo
-            </button>
-          )}
-          {connectedInfo && (
-            <button onClick={() => void handleDisconnect(true)} className="btn">Disconnect</button>
-          )}
-          {devMode && (
-            <>
-              <button
-                className={`btn${hexDragOver ? " btn-drop" : ""}`}
-                disabled={!clientRef.current}
-                onClick={handleHexClick}
-                onDragOver={handleHexDragOver}
-                onDragEnter={handleHexDragOver}
-                onDragLeave={handleHexDragLeave}
-                onDrop={handleHexDrop}
-              >
-                Upload .hex
-              </button>
-              <input ref={fileInputRef} type="file" accept=".hex,.ihx,.ihex,.txt" className="hidden" onChange={onHexFileChange} />
-            </>
-          )}
-          <button onClick={compileAndFlash} className="btn btn-primary" disabled={!clientRef.current || (!selectedLayout && !debugFirmware)}>
-            Compile & Flash
-          </button>
-        </div>
+        <ActionBar
+          demoMode={demoMode}
+          connectedInfo={connectedInfo}
+          devMode={devMode}
+          hexDragOver={hexDragOver}
+          clientRef={clientRef}
+          handleConnectClick={handleConnectClick}
+          handleDemoToggle={handleDemoToggle}
+          handleDisconnect={handleDisconnect}
+          handleHexClick={handleHexClick}
+          handleHexDragOver={handleHexDragOver}
+          handleHexDragLeave={handleHexDragLeave}
+          handleHexDrop={handleHexDrop}
+          fileInputRef={fileInputRef}
+          onHexFileChange={onHexFileChange}
+          compileAndFlash={compileAndFlash}
+          selectedLayout={selectedLayout}
+          debugFirmware={debugFirmware}
+        />
 
         {devMode && (
-          <div className="panel" style={{ marginBottom: "10px" }}>
-            <div className="panel-header">
-              <div className="panel-title">Development tools</div>
-              <label className="checkbox">
-                <input type="checkbox" checked={debugFirmware} onChange={(event) => setDebugFirmware(event.target.checked)} />
-                Debug firmware (USB CDC)
-              </label>
-            </div>
-            <p className="muted small">
-              Use debug firmware to expose a USB CDC serial console for troubleshooting layouts. See the <a className="link" href="https://github.com/AmyJeanes/KeypadFlasher#adding-support-for-new-keypads" target="_blank" rel="noreferrer">adding support guide</a> for wiring notes, LED direction tips, and how to contribute new keypad profiles.
-            </p>
-            {debugFirmware && (
-              <div className="card subtle" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <div className="card-title" style={{ marginBottom: 0 }}>Debug firmware options</div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <button className="btn" onClick={() => setDebugOptions(classicDebugOptions)}>Raw (no filtering/pull-ups)</button>
-                    <button className="btn" onClick={() => setDebugOptions(defaultDebugOptions)}>Reset defaults</button>
-                  </div>
-                </div>
-                <div className="muted small">
-                  Tweak how the debug logger handles floating pins and noisy edges.
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-                  <label className="checkbox" title="Majority-vote a few quick samples before logging a change to filter out glitches.">
-                    <input
-                      type="checkbox"
-                      checked={debugOptions.enableNoiseFilter}
-                      onChange={(e) => setDebugOptions((prev) => ({ ...prev, enableNoiseFilter: e.target.checked }))}
-                    />
-                    Enable noise filter
-                  </label>
-                  <label className="checkbox" title="Use INPUT_PULLUP on unassigned pins to bias floating lines high.">
-                    <input
-                      type="checkbox"
-                      checked={debugOptions.enablePullups}
-                      onChange={(e) => setDebugOptions((prev) => ({ ...prev, enablePullups: e.target.checked }))}
-                    />
-                    Pull-ups on unassigned pins
-                  </label>
-                  <label className="inline-input">
-                    <span className="input-label" title="How many quick samples to take when a pin flips before logging it.">Confirm samples</span>
-                    <input
-                      id="debug-confirm-samples"
-                      className="text-input"
-                      type="number"
-                      min={1}
-                      max={255}
-                      value={debugOptions.confirmSamples}
-                      onChange={(e) => setDebugOptions((prev) => ({ ...prev, confirmSamples: Number(e.target.value) || 1 }))}
-                    />
-                  </label>
-                  <label className="inline-input">
-                    <span className="input-label" title="Delay in milliseconds between confirmation samples when the filter is on.">Confirm delay (ms)</span>
-                    <input
-                      id="debug-confirm-delay"
-                      className="text-input"
-                      type="number"
-                      min={0}
-                      max={255}
-                      value={debugOptions.confirmDelayMs}
-                      onChange={(e) => setDebugOptions((prev) => ({ ...prev, confirmDelayMs: Math.max(0, Number(e.target.value) || 0) }))}
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-            <div className="card subtle" style={{ marginTop: "12px" }}>
-              <div className="card-title">Connected device</div>
-              <div>Bootloader: {connectedInfo ? connectedInfo.version : "n/a"}</div>
-              <div>Bootloader ID: {connectedInfo ? connectedInfo.id.join(", ") : "n/a"}</div>
-              <div>Device ID: {connectedInfo ? connectedInfo.deviceIdHex : "n/a"}</div>
-            </div>
-          </div>
+          <DevToolsPanel
+            debugFirmware={debugFirmware}
+            setDebugFirmware={setDebugFirmware}
+            debugOptions={debugOptions}
+            setDebugOptions={setDebugOptions}
+            classicDebugOptions={classicDebugOptions}
+            defaultDebugOptions={defaultDebugOptions}
+            connectedInfo={connectedInfo}
+          />
         )}
 
         <div className="space-y-2">
@@ -670,99 +584,74 @@ export default function KeypadFlasherApp() {
           />
         )}
 
-        <ConnectWizardPrompt
-          isOpen={showWizardPrompt}
-          onCancel={() => setShowWizardPrompt(false)}
-          onConfirm={() => { updateWizardHidden(false); openConnectWizard(); }}
-        />
-
-        <ConnectWizard
-          isOpen={showConnectWizard}
+        <ModalsHost
+          showWizardPrompt={showWizardPrompt}
+          setShowWizardPrompt={setShowWizardPrompt}
+          updateWizardHidden={updateWizardHidden}
+          openConnectWizard={openConnectWizard}
+          showConnectWizard={showConnectWizard}
+          setShowConnectWizard={setShowConnectWizard}
           status={status}
           isWindows={isWindows}
-          onClose={() => setShowConnectWizard(false)}
-          onRequestConnect={handleWizardConnect}
+          handleWizardConnect={handleWizardConnect}
+          connectSpinnerOpen={connectSpinnerOpen}
+          connectSpinnerClosing={connectSpinnerClosing}
+          handleConnectSpinnerAnimationEnd={handleConnectSpinnerAnimationEnd}
+          showDemoModal={showDemoModal}
+          demoModalClosingState={demoModalClosingState}
+          demoOptions={demoOptions}
+          selectedDemoKey={selectedDemoKey}
+          setSelectedDemoKey={setSelectedDemoKey}
+          handleStartDemo={handleStartDemo}
+          requestDemoModalClose={requestDemoModalClose}
+          handleDemoModalAnimationEnd={handleDemoModalAnimationEnd}
+          showGlobalLightingModal={showGlobalLightingModal}
+          globalLightingClosing={globalLightingClosing}
+          draftLedConfig={draftLedConfig}
+          setBrightnessPercent={setBrightnessPercent}
+          saveGlobalLightingModal={saveGlobalLightingModal}
+          requestGlobalLightingClose={requestGlobalLightingClose}
+          handleGlobalLightingAnimationEnd={handleGlobalLightingAnimationEnd}
+          showLightingModal={showLightingModal}
+          selectedLayout={selectedLayout}
+          layoutLedCount={layoutLedCount}
+          focusLedIndex={focusLedIndex}
+          lightingStatus={lightingStatus}
+          copiedLedLighting={Boolean(copiedLedLighting)}
+          lightingClosing={lightingClosing}
+          requestLightingClose={requestLightingClose}
+          handleLightingAnimationEnd={handleLightingAnimationEnd}
+          saveLightingModal={saveLightingModal}
+          setPassiveModeForLed={setPassiveModeForLed}
+          setPassiveColor={setPassiveColor}
+          setRainbowStepMs={setRainbowStepMs}
+          setBreathingMinPercent={setBreathingMinPercent}
+          setBreathingStepMs={setBreathingStepMs}
+          setActiveMode={setActiveMode}
+          setActiveColor={setActiveColor}
+          copyLedLighting={copyLedLighting}
+          pasteLedLighting={pasteLedLighting}
+          applyLightingToAll={applyLightingToAll}
+          ledDisplayName={ledDisplayName}
+          showExportModal={showExportModal}
+          exportModalClosingState={exportModalClosingState}
+          exportText={exportText}
+          exportCopyFlash={exportCopyFlash}
+          exportCopyStatus={exportCopyStatus}
+          handleExportCopy={handleExportCopy}
+          requestExportModalClose={requestExportModalClose}
+          handleExportModalAnimationEnd={handleExportModalAnimationEnd}
+          showImportModal={showImportModal}
+          importModalClosingState={importModalClosingState}
+          importText={importText}
+          importError={importError}
+          importTextAreaRef={importTextAreaRef}
+          setImportText={setImportText}
+          setImportError={setImportError}
+          applyImportedConfig={applyImportedConfig}
+          requestImportModalClose={requestImportModalClose}
+          handleImportModalAnimationEnd={handleImportModalAnimationEnd}
         />
-
-        {(connectSpinnerOpen || connectSpinnerClosing) && (
-          <ConnectSpinner
-            closing={connectSpinnerClosing}
-            onAnimationEnd={handleConnectSpinnerAnimationEnd}
-          />
-        )}
-
-        {showDemoModal && (
-          <DemoDeviceModal
-            closing={demoModalClosingState}
-            options={demoOptions}
-            selectedKey={selectedDemoKey}
-            onSelectKey={setSelectedDemoKey}
-            onStart={handleStartDemo}
-            onRequestClose={requestDemoModalClose}
-            onAnimationEnd={handleDemoModalAnimationEnd}
-          />
-        )}
-
-        {showGlobalLightingModal && (
-          <GlobalLightingModal
-            closing={globalLightingClosing}
-            draftLedConfig={draftLedConfig}
-            onChangeBrightness={setBrightnessPercent}
-            onSave={saveGlobalLightingModal}
-            onRequestClose={requestGlobalLightingClose}
-            onAnimationEnd={handleGlobalLightingAnimationEnd}
-          />
-        )}
-
-        {showLightingModal && selectedLayout && (
-          <KeyLightingModal
-            closing={lightingClosing}
-            draftLedConfig={draftLedConfig}
-            layoutLedCount={layoutLedCount}
-            focusLedIndex={focusLedIndex}
-            lightingStatus={lightingStatus}
-            copiedLedLighting={Boolean(copiedLedLighting)}
-            onRequestClose={requestLightingClose}
-            onAnimationEnd={handleLightingAnimationEnd}
-            onSave={saveLightingModal}
-            setPassiveModeForLed={setPassiveModeForLed}
-            setPassiveColor={setPassiveColor}
-            setRainbowStepMs={setRainbowStepMs}
-            setBreathingMinPercent={setBreathingMinPercent}
-            setBreathingStepMs={setBreathingStepMs}
-            setActiveMode={setActiveMode}
-            setActiveColor={setActiveColor}
-            copyLedLighting={copyLedLighting}
-            pasteLedLighting={pasteLedLighting}
-            applyLightingToAll={applyLightingToAll}
-            ledDisplayName={ledDisplayName}
-          />
-        )}
-
-        {showExportModal && (
-          <ExportConfigModal
-            closing={exportModalClosingState}
-            exportText={exportText}
-            exportCopyFlash={exportCopyFlash}
-            exportCopyStatus={exportCopyStatus}
-            onCopy={handleExportCopy}
-            onRequestClose={requestExportModalClose}
-            onAnimationEnd={handleExportModalAnimationEnd}
-          />
-        )}
-
-        {showImportModal && (
-          <ImportConfigModal
-            closing={importModalClosingState}
-            importText={importText}
-            importError={importError}
-            textAreaRef={importTextAreaRef}
-            onChangeText={(value) => { setImportText(value); setImportError(""); }}
-            onImport={() => applyImportedConfig(importText)}
-            onRequestClose={requestImportModalClose}
-            onAnimationEnd={handleImportModalAnimationEnd}
-          />
-        )}
 
         {!webUsbAvailable && (
           <div className="panel warn">Your browser does not support WebUSB. Try Chromium-based browsers over HTTPS.</div>
