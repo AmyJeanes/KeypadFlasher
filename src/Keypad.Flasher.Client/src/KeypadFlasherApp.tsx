@@ -6,10 +6,9 @@ import {
   type BindingProfileDto,
   type DeviceLayoutDto,
   type HidBindingDto,
-  type HidStepDto,
   type KnownDeviceProfile,
 } from "./lib/keypadConfigs";
-import { cloneLayout, loadConnectWizardHidden, loadLastDemoKey, saveConnectWizardHidden, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
+import { cloneLayout, loadLastDemoKey, saveLastDemoKey, saveStoredConfig } from "./lib/layoutStorage";
 import { LayoutPreview } from "./components/LayoutPreview";
 import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "./components/lightingStyles";
 import { ConnectSpinner } from "./components/ConnectSpinner";
@@ -28,11 +27,11 @@ import { useConfigPersistence } from "./hooks/useConfigPersistence";
 import { useFirmwareFlashing, type DebugOptions as DebugOptionsDto } from "./hooks/useFirmwareFlashing";
 import { useConfigImportExport } from "./hooks/useConfigImportExport";
 import { useLightingState } from "./hooks/useLightingState";
-import type { EditTarget, LedConfigurationDto, LedColor, Status, LedPerKeyDto } from "./types";
+import { useToast } from "./hooks/useToast";
+import { useConnectionFlow } from "./hooks/useConnectionFlow";
+import { useBindingsEditor } from "./hooks/useBindingsEditor";
+import type { LedConfigurationDto, LedColor, Status, LedPerKeyDto } from "./types";
 import "./styles/base.css";
-
-
-type Toast = { message: string; tone: "info" | "success" | "warn" | "error" };
 
 function validateFixedRows(rows: number[], buttonCount: number): { rows: number[]; error: string | null } {
   const total = rows.reduce((sum, n) => sum + n, 0);
@@ -52,23 +51,15 @@ export default function KeypadFlasherApp() {
   const [selectedProfile, setSelectedProfile] = useState<KnownDeviceProfile | null>(null);
   const [currentBindings, setCurrentBindings] = useState<BindingProfileDto | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<DeviceLayoutDto | null>(null);
-  const [editorTarget, setEditorTarget] = useState<EditTarget | null>(null);
-  const [editorBinding, setEditorBinding] = useState<HidBindingDto | null>(null);
-  const [stepClipboard, setStepClipboard] = useState<HidStepDto[] | null>(null);
   const [showDemoModal, setShowDemoModal] = useState<boolean>(false);
   const [lastDemoKey, setLastDemoKey] = useState<string | null>(() => loadLastDemoKey());
   const [selectedDemoKey, setSelectedDemoKey] = useState<string | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
   const [devMode, setDevMode] = useState<boolean>(false);
   const [debugFirmware, setDebugFirmware] = useState<boolean>(false);
   const defaultDebugOptions: DebugOptionsDto = { enableNoiseFilter: true, enablePullups: true, confirmSamples: 3, confirmDelayMs: 1 };
   const classicDebugOptions: DebugOptionsDto = { enableNoiseFilter: false, enablePullups: false, confirmSamples: 1, confirmDelayMs: 0 };
   const [debugOptions, setDebugOptions] = useState<DebugOptionsDto>(defaultDebugOptions);
-  const [wizardHidden, setWizardHidden] = useState<boolean>(() => loadConnectWizardHidden());
-  const [showWizardPrompt, setShowWizardPrompt] = useState<boolean>(false);
-  const [connectSpinnerOpen, setConnectSpinnerOpen] = useState<boolean>(false);
-  const [showConnectWizard, setShowConnectWizard] = useState<boolean>(false);
-  const toastTimerRef = useRef<number | null>(null);
+  const { toast, showToast, clearToast } = useToast();
   const {
     ledConfig,
     setLedConfig,
@@ -96,12 +87,6 @@ export default function KeypadFlasherApp() {
     applyLightingToAll,
     copiedLedLighting,
   } = useLightingState();
-
-  const showToast = useCallback((message: string, tone: Toast["tone"] = "info", durationMs = 3200) => {
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    setToast({ message, tone });
-    toastTimerRef.current = window.setTimeout(() => setToast(null), durationMs);
-  }, []);
 
   const ledCountFromLayout = useCallback((layout: DeviceLayoutDto | null): number => {
     if (!layout) return 0;
@@ -220,6 +205,32 @@ export default function KeypadFlasherApp() {
     debugOptions,
   });
 
+  const {
+    showWizardPrompt,
+    setShowWizardPrompt,
+    showConnectWizard,
+    setShowConnectWizard,
+    connectSpinnerOpen,
+    connectSpinnerClosing,
+    handleConnectSpinnerAnimationEnd,
+    handleConnectClick,
+    handleWizardConnect,
+    openConnectWizard,
+    updateWizardHidden,
+  } = useConnectionFlow({ status, performConnect });
+
+  const {
+    editorTarget,
+    editorBinding,
+    stepClipboard,
+    setStepClipboard,
+    openEdit,
+    handleEditorSave,
+    handleEditorClose,
+    updateBootloaderOnBoot,
+    updateBootloaderChordMember,
+  } = useBindingsEditor({ currentBindings, setCurrentBindings, setSelectedLayout });
+
   const importTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const demoModalClosing = useModalClosing(showDemoModal, useCallback(() => setShowDemoModal(false), []));
   const globalLightingModalClosing = useModalClosing(showGlobalLightingModal, closeGlobalLightingModal);
@@ -227,15 +238,6 @@ export default function KeypadFlasherApp() {
   const { isClosing: demoModalClosingState, requestClose: requestDemoModalClose, handleAnimationEnd: handleDemoModalAnimationEnd } = demoModalClosing;
   const { isClosing: globalLightingClosing, requestClose: requestGlobalLightingClose, handleAnimationEnd: handleGlobalLightingAnimationEnd } = globalLightingModalClosing;
   const { isClosing: lightingClosing, requestClose: requestLightingClose, handleAnimationEnd: handleLightingAnimationEnd } = lightingModalClosing;
-
-  const shouldShowConnectSpinner = status.state === "requesting" && !showConnectWizard;
-  const connectSpinnerModal = useModalClosing(connectSpinnerOpen, useCallback(() => setConnectSpinnerOpen(false), []));
-  const { isClosing: connectSpinnerClosing, requestClose: requestConnectSpinnerClose, handleAnimationEnd: handleConnectSpinnerAnimationEnd } = connectSpinnerModal;
-
-  const updateWizardHidden = useCallback((hidden: boolean) => {
-    setWizardHidden(hidden);
-    saveConnectWizardHidden(hidden);
-  }, []);
 
   const {
     showExportModal,
@@ -289,8 +291,8 @@ export default function KeypadFlasherApp() {
 
   useEffect(() => () => {
     clientRef.current?.disconnect().catch(() => {});
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-  }, []);
+    clearToast();
+  }, [clearToast]);
 
   useEffect(() => {
     if (!showImportModal) return;
@@ -331,20 +333,6 @@ export default function KeypadFlasherApp() {
     setShowDemoModal(true);
   }, [demoMode, handleDisconnect]);
 
-  const openConnectWizard = useCallback(() => setShowConnectWizard(true), []);
-
-  const handleConnectClick = useCallback(() => {
-    if (wizardHidden) {
-      void performConnect({ wizardHidden, onShowWizardPrompt: () => setShowWizardPrompt(true) });
-      return;
-    }
-    openConnectWizard();
-  }, [performConnect, wizardHidden, openConnectWizard]);
-
-  const handleWizardConnect = useCallback(async () => {
-    await performConnect({ origin: "wizard", wizardHidden, onShowWizardPrompt: () => setShowWizardPrompt(true) });
-  }, [performConnect, wizardHidden]);
-
   const handleStartDemo = useCallback(async () => {
     await startDemo({
       selectedDemoKey,
@@ -367,61 +355,6 @@ export default function KeypadFlasherApp() {
   }
 
   const layoutLedCount = ledCountFromLayout(selectedLayout);
-
-  const openEdit = (target: EditTarget) => {
-    setEditorTarget(target);
-    const binding = (() => {
-      if (target.type === "button") return buttonBindings.get(target.buttonId) ?? null;
-      const enc = encoderBindings.get(target.encoderId);
-      if (!enc) return null;
-      if (target.direction === "cw") return enc.clockwise;
-      if (target.direction === "ccw") return enc.counterClockwise;
-      return enc.press ?? null;
-    })();
-    setEditorBinding(binding);
-  };
-
-  const updateBootloaderOnBoot = (target: EditTarget, value: boolean) => {
-    setSelectedLayout((prev) => {
-      if (!prev) return prev;
-      if (target.type === "button") {
-        return {
-          ...prev,
-          buttons: prev.buttons.map((b) => (b.id === target.buttonId ? { ...b, bootloaderOnBoot: value } : b)),
-        };
-      }
-      if (target.type === "encoder" && target.direction === "press") {
-        return {
-          ...prev,
-          encoders: prev.encoders.map((e) => (e.id === target.encoderId && e.press
-            ? { ...e, press: { ...e.press, bootloaderOnBoot: value } }
-            : e)),
-        };
-      }
-      return prev;
-    });
-  };
-
-  const updateBootloaderChordMember = (target: EditTarget, value: boolean) => {
-    setSelectedLayout((prev) => {
-      if (!prev) return prev;
-      if (target.type === "button") {
-        return {
-          ...prev,
-          buttons: prev.buttons.map((b) => (b.id === target.buttonId ? { ...b, bootloaderChordMember: value } : b)),
-        };
-      }
-      if (target.type === "encoder" && target.direction === "press") {
-        return {
-          ...prev,
-          encoders: prev.encoders.map((e) => (e.id === target.encoderId && e.press
-            ? { ...e, press: { ...e.press, bootloaderChordMember: value } }
-            : e)),
-        };
-      }
-      return prev;
-    });
-  };
 
   const ledDisplayName = (idx: number): string => {
     const btn = userButtons.find((b) => b.ledIndex === idx);
@@ -449,36 +382,6 @@ export default function KeypadFlasherApp() {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [showLightingModal, focusLedIndex]);
-
-
-  const handleEditorSave = (binding: HidBindingDto) => {
-    if (!editorTarget || !currentBindings) return;
-    if (editorTarget.type === "button") {
-      const other = currentBindings.buttons.filter((b) => b.id !== editorTarget.buttonId);
-      setCurrentBindings({
-        ...currentBindings,
-        buttons: [...other, { id: editorTarget.buttonId, binding }].sort((a, b) => a.id - b.id),
-      });
-      return;
-    }
-
-    const existing = currentBindings.encoders.find((e) => e.id === editorTarget.encoderId);
-    const others = currentBindings.encoders.filter((e) => e.id !== editorTarget.encoderId);
-    const updated = existing
-      ? { ...existing }
-      : { id: editorTarget.encoderId, clockwise: binding, counterClockwise: binding };
-
-    if (editorTarget.direction === "cw") updated.clockwise = binding;
-    if (editorTarget.direction === "ccw") updated.counterClockwise = binding;
-    if (editorTarget.direction === "press") updated.press = binding;
-
-    setCurrentBindings({ ...currentBindings, encoders: [...others, updated].sort((a, b) => a.id - b.id) });
-  };
-
-  const handleEditorClose = () => {
-    setEditorTarget(null);
-    setEditorBinding(null);
-  };
 
   const resetToDefaults = () => {
     if (!selectedProfile) return;
@@ -550,22 +453,6 @@ export default function KeypadFlasherApp() {
   })();
 
   const statusProgress = progress.total > 0 ? progress : null;
-
-  useEffect(() => {
-    if ((status.state === "connectedKnown" || status.state === "connectedUnknown") && !wizardHidden) {
-      updateWizardHidden(true);
-    }
-  }, [status.state, wizardHidden, updateWizardHidden]);
-
-  useEffect(() => {
-    if (shouldShowConnectSpinner) {
-      setConnectSpinnerOpen(true);
-      return;
-    }
-    if (connectSpinnerOpen) {
-      requestConnectSpinnerClose();
-    }
-  }, [connectSpinnerOpen, requestConnectSpinnerClose, shouldShowConnectSpinner]);
 
   return (
     <div className="app-shell">
