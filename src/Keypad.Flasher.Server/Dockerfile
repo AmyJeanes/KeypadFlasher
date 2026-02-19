@@ -23,6 +23,8 @@ RUN apt-get -y install nodejs
 
 FROM with-deps AS build
 ARG BUILD_CONFIGURATION=Release
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
+    DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 WORKDIR /src
 COPY ["Keypad.Flasher.Server/Keypad.Flasher.Server.csproj", "Keypad.Flasher.Server/"]
 COPY ["Keypad.Flasher.Client/Keypad.Flasher.Client.esproj", "Keypad.Flasher.Client/"]
