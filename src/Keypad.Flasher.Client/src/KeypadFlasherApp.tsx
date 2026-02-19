@@ -18,17 +18,20 @@ import {
   type HidStepDto,
   type KnownDeviceProfile,
 } from "./lib/keypad-configs";
-import { normalizeIncomingStep } from "./lib/binding-utils";
-import { cloneLayout, loadConnectWizardHidden, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveConnectWizardHidden, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layout-storage";
+import { sameBootloaderId } from "./lib/configValidation";
+import { clearStoredConfig, cloneLayout, loadConnectWizardHidden, loadLastBootloaderId, loadLastDemoKey, loadStoredConfig, saveConnectWizardHidden, saveLastBootloaderId, saveLastDemoKey, saveStoredConfig } from "./lib/layout-storage";
 import { LayoutPreview } from "./components/LayoutPreview";
 import { LightingPreview } from "./components/LightingPreview";
+import { DEFAULT_BREATHING_MIN_PERCENT, DEFAULT_BREATHING_STEP_MS, DEFAULT_RAINBOW_STEP_MS } from "./components/lightingStyles";
 import { ConnectSpinner } from "./components/ConnectSpinner";
 import { StatusBanner } from "./components/StatusBanner";
 import { StepEditor } from "./components/StepEditor";
 import { ConnectWizard } from "./components/ConnectWizard";
 import { ConnectWizardPrompt } from "./components/ConnectWizardPrompt";
 import { useModalClosing } from "./hooks/useModalClosing";
-import type { EditTarget, LedConfigurationDto, LedColor, PassiveLedMode, ActiveLedMode, Status } from "./types";
+import { useConfigImportExport } from "./hooks/useConfigImportExport";
+import { useLightingState } from "./hooks/useLightingState";
+import type { EditTarget, LedConfigurationDto, LedColor, PassiveLedMode, ActiveLedMode, Status, LedPerKeyDto } from "./types";
 import "./styles/base.css";
 
 type FirmwareRequestBody = {
@@ -48,11 +51,6 @@ type DebugOptionsDto = {
 
 type Toast = { message: string; tone: "info" | "success" | "warn" | "error" };
 
-type BootloaderConfig = {
-  buttons: { id: number; bootloaderOnBoot: boolean; bootloaderChordMember: boolean }[];
-  encoders: { id: number; press?: { bootloaderOnBoot: boolean; bootloaderChordMember: boolean } }[];
-};
-
 function validateFixedRows(rows: number[], buttonCount: number): { rows: number[]; error: string | null } {
   const total = rows.reduce((sum, n) => sum + n, 0);
   if (total === buttonCount) return { rows, error: null };
@@ -62,162 +60,6 @@ function validateFixedRows(rows: number[], buttonCount: number): { rows: number[
     error: `Layout rows total ${total}, expected ${buttonCount}. Falling back to single-row preview.`,
   };
 }
-
-const sameBootloaderId = (a: number[] | null, b: number[] | null): boolean => {
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((v, idx) => v === b[idx]);
-};
-
-const isSequenceBinding = (value: unknown): value is HidBindingDto => {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<HidBindingDto>;
-  return candidate.type === "Sequence" && Array.isArray(candidate.steps);
-};
-
-const toSequenceBinding = (value: unknown, label: string): HidBindingDto => {
-  if (!isSequenceBinding(value)) throw new Error(`${label} binding invalid.`);
-  return { type: "Sequence", steps: value.steps.map((step) => normalizeIncomingStep(step)) };
-};
-
-const requireNumber = (value: unknown, label: string): number => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  throw new Error(`${label} must be a number.`);
-};
-
-const requireBoolean = (value: unknown, label: string): boolean => {
-  if (typeof value === "boolean") return value;
-  throw new Error(`${label} must be a boolean.`);
-};
-
-const validateBootloaderConfigCandidate = (raw: unknown): BootloaderConfig => {
-  if (!raw || typeof raw !== "object") throw new Error("Bootloader config must be an object.");
-  const candidate = raw as { buttons?: unknown; encoders?: unknown };
-  if (!Array.isArray(candidate.buttons)) throw new Error("Bootloader config missing buttons array.");
-  if (!Array.isArray(candidate.encoders)) throw new Error("Bootloader config missing encoders array.");
-  const buttons = candidate.buttons.map((b) => {
-    if (!b || typeof b !== "object") throw new Error("Bootloader button invalid.");
-    const { id, bootloaderOnBoot, bootloaderChordMember } = b as { id?: unknown; bootloaderOnBoot?: unknown; bootloaderChordMember?: unknown };
-    return {
-      id: requireNumber(id, "Bootloader button id"),
-      bootloaderOnBoot: requireBoolean(bootloaderOnBoot, "Bootloader button bootloaderOnBoot"),
-      bootloaderChordMember: requireBoolean(bootloaderChordMember, "Bootloader button bootloaderChordMember"),
-    };
-  });
-  const encoders = candidate.encoders.map((e) => {
-    if (!e || typeof e !== "object") throw new Error("Bootloader encoder invalid.");
-    const { id, press } = e as { id?: unknown; press?: unknown };
-    const validatedPress = press != null
-      ? {
-          bootloaderOnBoot: requireBoolean((press as { bootloaderOnBoot?: unknown }).bootloaderOnBoot, "Bootloader encoder press bootloaderOnBoot"),
-          bootloaderChordMember: requireBoolean((press as { bootloaderChordMember?: unknown }).bootloaderChordMember, "Bootloader encoder press bootloaderChordMember"),
-        }
-      : undefined;
-    return { id: requireNumber(id, "Bootloader encoder id"), press: validatedPress };
-  });
-  return { buttons, encoders };
-};
-
-const validateBindingProfileCandidate = (raw: unknown): BindingProfileDto => {
-  if (!raw || typeof raw !== "object") throw new Error("Bindings must be an object.");
-  const candidate = raw as { buttons?: unknown; encoders?: unknown };
-  if (!Array.isArray(candidate.buttons)) throw new Error("Bindings must include buttons array.");
-  if (!Array.isArray(candidate.encoders)) throw new Error("Bindings must include encoders array.");
-  const btns = candidate.buttons;
-  const encs = candidate.encoders;
-  const buttons = btns.map((b): BindingProfileDto["buttons"][number] => {
-    if (!b || typeof b !== "object") throw new Error("Button binding invalid.");
-    const { id, binding } = b as { id?: unknown; binding?: unknown };
-    if (typeof id !== "number" || !Number.isFinite(id)) throw new Error("Button binding id missing.");
-    const normalizedBinding = toSequenceBinding(binding, "Button");
-    return { id, binding: normalizedBinding };
-  });
-  const encoders = encs.map((e): BindingProfileDto["encoders"][number] => {
-    if (!e || typeof e !== "object") throw new Error("Encoder binding invalid.");
-    const { id, clockwise, counterClockwise, press } = e as { id?: unknown; clockwise?: unknown; counterClockwise?: unknown; press?: unknown };
-    if (typeof id !== "number" || !Number.isFinite(id)) throw new Error("Encoder binding id missing.");
-    const base: { id: number; clockwise: HidBindingDto; counterClockwise: HidBindingDto; press?: HidBindingDto } = {
-      id,
-      clockwise: toSequenceBinding(clockwise, "Encoder clockwise"),
-      counterClockwise: toSequenceBinding(counterClockwise, "Encoder counter-clockwise"),
-    };
-    if (press != null) {
-      base.press = toSequenceBinding(press, "Encoder press");
-    }
-    return base;
-  });
-  return { buttons, encoders };
-};
-
-const validateLedConfigCandidate = (raw: unknown): LedConfigurationDto => {
-  if (!raw || typeof raw !== "object") throw new Error("LED config must be an object.");
-  const rawConfig = raw as {
-    passiveModes?: unknown;
-    passiveColors?: unknown;
-    activeModes?: unknown;
-    activeColors?: unknown;
-    brightnessPercent?: unknown;
-    rainbowStepMs?: unknown;
-    breathingMinPercent?: unknown;
-    breathingStepMs?: unknown;
-  };
-  if (!Array.isArray(rawConfig.passiveModes)) throw new Error("LED config missing passiveModes array.");
-  if (!Array.isArray(rawConfig.passiveColors)) throw new Error("LED config missing passiveColors array.");
-  if (!Array.isArray(rawConfig.activeModes)) throw new Error("LED config missing activeModes array.");
-  if (!Array.isArray(rawConfig.activeColors)) throw new Error("LED config missing activeColors array.");
-
-  const normColor = (color: unknown): LedColor => {
-    if (!color || typeof color !== "object") throw new Error("LED color must be an object.");
-    const candidateColor = color as { r?: unknown; g?: unknown; b?: unknown };
-    return {
-      r: requireNumber(candidateColor.r, "LED color r"),
-      g: requireNumber(candidateColor.g, "LED color g"),
-      b: requireNumber(candidateColor.b, "LED color b"),
-    };
-  };
-
-  const normalizePassiveMode = (mode: unknown): PassiveLedMode => {
-    if (mode === "Off" || mode === "Rainbow" || mode === "Static" || mode === "Breathing") return mode;
-    throw new Error("LED passive mode invalid.");
-  };
-  const normalizeActiveMode = (mode: unknown): ActiveLedMode => {
-    if (mode === "Off" || mode === "Solid" || mode === "Nothing") return mode;
-    throw new Error("LED active mode invalid.");
-  };
-
-  return {
-    passiveModes: rawConfig.passiveModes.map((m) => normalizePassiveMode(m)),
-    passiveColors: rawConfig.passiveColors.map((c) => normColor(c)),
-    activeModes: rawConfig.activeModes.map((m) => normalizeActiveMode(m)),
-    activeColors: rawConfig.activeColors.map((c) => normColor(c)),
-    brightnessPercent: requireNumber(rawConfig.brightnessPercent, "LED brightnessPercent"),
-    rainbowStepMs: requireNumber(rawConfig.rainbowStepMs, "LED rainbowStepMs"),
-    breathingMinPercent: requireNumber(rawConfig.breathingMinPercent, "LED breathingMinPercent"),
-    breathingStepMs: requireNumber(rawConfig.breathingStepMs, "LED breathingStepMs"),
-  };
-};
-
-const bootloaderConfigFromLayout = (layout: DeviceLayoutDto): BootloaderConfig => ({
-  buttons: layout.buttons.map((b) => ({ id: b.id, bootloaderOnBoot: b.bootloaderOnBoot, bootloaderChordMember: b.bootloaderChordMember })),
-  encoders: layout.encoders.map((e) => ({ id: e.id, press: e.press ? { bootloaderOnBoot: e.press.bootloaderOnBoot, bootloaderChordMember: e.press.bootloaderChordMember } : undefined })),
-});
-
-const applyBootloaderConfigToLayout = (layout: DeviceLayoutDto, config: BootloaderConfig): DeviceLayoutDto => {
-  const buttonMap = new Map(config.buttons.map((b) => [b.id, b] as const));
-  const encoderMap = new Map(config.encoders.map((e) => [e.id, e] as const));
-  return {
-    ...layout,
-    buttons: layout.buttons.map((b) => {
-      const cfg = buttonMap.get(b.id);
-      return cfg ? { ...b, bootloaderOnBoot: cfg.bootloaderOnBoot, bootloaderChordMember: cfg.bootloaderChordMember } : b;
-    }),
-    encoders: layout.encoders.map((e) => {
-      const cfg = encoderMap.get(e.id);
-      if (!cfg || !e.press) return e;
-      if (!cfg.press) return { ...e, press: { ...e.press, bootloaderOnBoot: false, bootloaderChordMember: false } };
-      return { ...e, press: { ...e.press, bootloaderOnBoot: cfg.press.bootloaderOnBoot, bootloaderChordMember: cfg.press.bootloaderChordMember } };
-    }),
-  };
-};
 
 export default function KeypadFlasherApp() {
   const [status, setStatus] = useState<Status>({ state: "idle" });
@@ -231,18 +73,18 @@ export default function KeypadFlasherApp() {
 
     const target = focusLedIndex != null ? focusLedIndex : 0;
     const activeConfig = draftLedConfig;
-    const modalLedCount = activeConfig?.passiveColors.length ?? 0;
-    const passiveModeCount = activeConfig?.passiveModes.length ?? 0;
-    if (target < 0 || target >= modalLedCount || target >= passiveModeCount)
+    const modalLedCount = activeConfig?.leds.length ?? 0;
+    if (target < 0 || target >= modalLedCount)
     {
       return <div className="muted small">LED out of range.</div>;
     }
 
-    const passiveMode = activeConfig.passiveModes[target];
-    const activeModeValue = activeConfig.activeModes[target];
+    const targetLed = activeConfig.leds[target];
+    const passiveMode = targetLed.passiveMode;
+    const activeModeValue = targetLed.activeMode;
     const modalActiveSolidEnabled = activeModeValue === "Solid";
-    const previewPassiveColor = activeConfig.passiveColors[target];
-    const previewActiveColor = activeConfig.activeColors[target];
+    const previewPassiveColor = targetLed.passiveColor;
+    const previewActiveColor = targetLed.activeColor;
     const selectorRowStyle = { display: "grid", gridTemplateColumns: "140px minmax(160px, 220px)", alignItems: "center", gap: "10px 12px", width: "100%" } as const;
     const pickerRowStyle = { display: "grid", gridTemplateColumns: "140px auto", alignItems: "center", gap: "10px 12px", width: "100%" } as const;
     const sliderRowStyle = { display: "grid", gridTemplateColumns: "140px 1fr 72px", alignItems: "center", gap: "10px 12px", width: "100%" } as const;
@@ -260,9 +102,9 @@ export default function KeypadFlasherApp() {
               passiveColor={previewPassiveColor}
               activeMode={activeModeValue}
               activeColor={previewActiveColor}
-              rainbowStepMs={draftLedConfig.rainbowStepMs}
-              breathingMinPercent={draftLedConfig.breathingMinPercent}
-              breathingStepMs={draftLedConfig.breathingStepMs}
+              rainbowStepMs={targetLed.rainbowStepMs}
+              breathingMinPercent={targetLed.breathingMinPercent}
+              breathingStepMs={targetLed.breathingStepMs}
               ledIndex={target}
               size="md"
               interactive
@@ -299,10 +141,10 @@ export default function KeypadFlasherApp() {
                     min={5}
                     max={100}
                   step={1}
-                  value={draftLedConfig.rainbowStepMs}
-                  onChange={(e) => setRainbowStepMs(Number(e.target.value))}
+                  value={targetLed.rainbowStepMs}
+                  onChange={(e) => setRainbowStepMs(target, Number(e.target.value))}
                 />
-                <span style={{ textAlign: "right" }}>{draftLedConfig.rainbowStepMs} ms</span>
+                <span style={{ textAlign: "right" }}>{targetLed.rainbowStepMs} ms</span>
               </label>
             )}
             {passiveMode === "Breathing" && (
@@ -311,7 +153,7 @@ export default function KeypadFlasherApp() {
                   <span>Color</span>
                   <input
                     type="color"
-                    value={colorToHex(activeConfig.passiveColors[target])}
+                    value={colorToHex(targetLed.passiveColor)}
                     onChange={(e) => setPassiveColor(target, hexToColor(e.target.value))}
                   />
                 </label>
@@ -321,10 +163,10 @@ export default function KeypadFlasherApp() {
                     type="range"
                     min={0}
                     max={80}
-                    value={draftLedConfig.breathingMinPercent}
-                    onChange={(e) => setBreathingMinPercent(Number(e.target.value))}
+                    value={targetLed.breathingMinPercent}
+                    onChange={(e) => setBreathingMinPercent(target, Number(e.target.value))}
                   />
-                  <span style={{ textAlign: "right" }}>{draftLedConfig.breathingMinPercent}%</span>
+                  <span style={{ textAlign: "right" }}>{targetLed.breathingMinPercent}%</span>
                 </label>
                 <label className="muted small" style={sliderRowStyle}>
                   <span>Breathing step</span>
@@ -333,10 +175,10 @@ export default function KeypadFlasherApp() {
                     min={5}
                     max={100}
                     step={1}
-                    value={draftLedConfig.breathingStepMs}
-                    onChange={(e) => setBreathingStepMs(Number(e.target.value))}
+                    value={targetLed.breathingStepMs}
+                    onChange={(e) => setBreathingStepMs(target, Number(e.target.value))}
                   />
-                  <span style={{ textAlign: "right" }}>{draftLedConfig.breathingStepMs} ms</span>
+                  <span style={{ textAlign: "right" }}>{targetLed.breathingStepMs} ms</span>
                 </label>
               </div>
             )}
@@ -345,7 +187,7 @@ export default function KeypadFlasherApp() {
                 <span>Color</span>
                 <input
                   type="color"
-                  value={colorToHex(activeConfig.passiveColors[target])}
+                  value={colorToHex(targetLed.passiveColor)}
                   onChange={(e) => setPassiveColor(target, hexToColor(e.target.value))}
                 />
               </label>
@@ -362,7 +204,7 @@ export default function KeypadFlasherApp() {
         <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
           <span className="muted small" style={{ minWidth: "56px" }}>Active</span>
           <select
-            value={activeConfig.activeModes[target]}
+            value={targetLed.activeMode}
             onChange={(e) => setActiveMode(target, e.target.value as ActiveLedMode)}
           >
             <option value="Off">Off</option>
@@ -372,16 +214,16 @@ export default function KeypadFlasherApp() {
           {modalActiveSolidEnabled && (
             <input
               type="color"
-              value={colorToHex(activeConfig.activeColors[target])}
+              value={colorToHex(targetLed.activeColor)}
               onChange={(e) => setActiveColor(target, hexToColor(e.target.value))}
             />
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "12px" }}>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
-            <button className="btn" onClick={() => copyLedLighting(target)}>Copy</button>
-            <button className="btn" disabled={!copiedLedLighting} onClick={() => pasteLedLighting(target)}>Paste</button>
-            <button className="btn" onClick={() => applyLightingToAll(target)}>Apply to all</button>
+            <button className="btn" onClick={() => copyLedLighting(target, ledDisplayName(target))}>Copy</button>
+            <button className="btn" disabled={!copiedLedLighting} onClick={() => pasteLedLighting(target, ledDisplayName(target))}>Paste</button>
+              <button className="btn" onClick={() => applyLightingToAll(target, ledDisplayName(target))}>Apply to all</button>
           </div>
           <div style={{ minHeight: "18px", textAlign: "right" }}>
             <span className="muted small">{lightingStatus}</span>
@@ -400,29 +242,43 @@ export default function KeypadFlasherApp() {
   const [rememberedBootloaderId, setRememberedBootloaderId] = useState<number[] | null>(null);
   const [currentBindings, setCurrentBindings] = useState<BindingProfileDto | null>(null);
   const [selectedLayout, setSelectedLayout] = useState<DeviceLayoutDto | null>(null);
-  const [ledConfig, setLedConfig] = useState<LedConfigurationDto | null>(null);
   const [editorTarget, setEditorTarget] = useState<EditTarget | null>(null);
   const [editorBinding, setEditorBinding] = useState<HidBindingDto | null>(null);
   const [stepClipboard, setStepClipboard] = useState<HidStepDto[] | null>(null);
-  const [showGlobalLightingModal, setShowGlobalLightingModal] = useState<boolean>(false);
-  const [showLightingModal, setShowLightingModal] = useState<boolean>(false);
-  const [focusLedIndex, setFocusLedIndex] = useState<number | null>(null);
-  const [copiedLedLighting, setCopiedLedLighting] = useState<{ passiveMode: PassiveLedMode; passive: LedColor; activeMode: ActiveLedMode; activeColor: LedColor } | null>(null);
-  const [draftLedConfig, setDraftLedConfig] = useState<LedConfigurationDto | null>(null);
-  const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [showImportModal, setShowImportModal] = useState<boolean>(false);
-  const [exportText, setExportText] = useState<string>("");
-  const [exportCopyStatus, setExportCopyStatus] = useState<string>("");
-  const [exportCopyFlash, setExportCopyFlash] = useState<boolean>(false);
-  const [importText, setImportText] = useState<string>("");
-  const [importError, setImportError] = useState<string>("");
   const [showDemoModal, setShowDemoModal] = useState<boolean>(false);
   const [lastDemoKey, setLastDemoKey] = useState<string | null>(() => loadLastDemoKey());
   const [selectedDemoKey, setSelectedDemoKey] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const defaultLightingStatus = "Copy a key's lighting to paste or apply to all.";
   const modalPointerDownRef = useRef<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
+
+  const {
+    ledConfig,
+    setLedConfig,
+    draftLedConfig,
+    showGlobalLightingModal,
+    showLightingModal,
+    focusLedIndex,
+    openGlobalLightingModal,
+    closeGlobalLightingModal,
+    saveGlobalLightingModal,
+    openLightingModal,
+    closeLightingModal,
+    saveLightingModal,
+    setPassiveColor,
+    setPassiveModeForLed,
+    setActiveMode,
+    setActiveColor,
+    setBrightnessPercent,
+    setRainbowStepMs,
+    setBreathingMinPercent,
+    setBreathingStepMs,
+    lightingStatus,
+    copyLedLighting,
+    pasteLedLighting,
+    applyLightingToAll,
+    copiedLedLighting,
+  } = useLightingState();
 
   const showToast = useCallback((message: string, tone: Toast["tone"] = "info", durationMs = 3200) => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -439,26 +295,11 @@ export default function KeypadFlasherApp() {
   const [wizardHidden, setWizardHidden] = useState<boolean>(() => loadConnectWizardHidden());
   const [showWizardPrompt, setShowWizardPrompt] = useState<boolean>(false);
   const demoModalClosing = useModalClosing(showDemoModal, useCallback(() => setShowDemoModal(false), []));
-  const globalLightingModalClosing = useModalClosing(showGlobalLightingModal, useCallback(() => {
-    setShowGlobalLightingModal(false);
-    setDraftLedConfig(null);
-  }, []));
-  const lightingModalClosing = useModalClosing(showLightingModal, useCallback(() => {
-    setShowLightingModal(false);
-    setDraftLedConfig(null);
-    setFocusLedIndex(null);
-    setLightingStatus(defaultLightingStatus);
-  }, [defaultLightingStatus]));
-  const exportModalClosing = useModalClosing(showExportModal, useCallback(() => setShowExportModal(false), []));
-  const importModalClosing = useModalClosing(showImportModal, useCallback(() => {
-    setShowImportModal(false);
-    setImportError("");
-  }, []));
+  const globalLightingModalClosing = useModalClosing(showGlobalLightingModal, closeGlobalLightingModal);
+  const lightingModalClosing = useModalClosing(showLightingModal, closeLightingModal);
   const { isClosing: demoModalClosingState, requestClose: requestDemoModalClose, handleAnimationEnd: handleDemoModalAnimationEnd } = demoModalClosing;
   const { isClosing: globalLightingClosing, requestClose: requestGlobalLightingClose, handleAnimationEnd: handleGlobalLightingAnimationEnd } = globalLightingModalClosing;
   const { isClosing: lightingClosing, requestClose: requestLightingClose, handleAnimationEnd: handleLightingAnimationEnd } = lightingModalClosing;
-  const { isClosing: exportModalClosingState, requestClose: requestExportModalClose, handleAnimationEnd: handleExportModalAnimationEnd } = exportModalClosing;
-  const { isClosing: importModalClosingState, requestClose: requestImportModalClose, handleAnimationEnd: handleImportModalAnimationEnd } = importModalClosing;
 
   const shouldShowConnectSpinner = status.state === "requesting" && !showConnectWizard;
   const [connectSpinnerOpen, setConnectSpinnerOpen] = useState<boolean>(false);
@@ -482,26 +323,25 @@ export default function KeypadFlasherApp() {
   const buildDefaultLedConfig = useCallback((layout: DeviceLayoutDto | null): LedConfigurationDto | null => {
     const count = ledCountFromLayout(layout);
     if (count <= 0) return null;
-    const passiveModes: PassiveLedMode[] = Array.from({ length: count }, () => "Rainbow");
-    const passiveColors: LedColor[] = Array.from({ length: count }, (_, idx) => {
+    const leds = Array.from({ length: count }, (_, idx): LedPerKeyDto => {
       const seq: LedColor[] = [
         { r: 255, g: 0, b: 0 },
         { r: 255, g: 255, b: 0 },
         { r: 0, g: 255, b: 0 },
       ];
-      return seq[idx % seq.length];
+      return {
+        passiveMode: "Rainbow",
+        passiveColor: seq[idx % seq.length],
+        activeMode: "Solid",
+        activeColor: { r: 255, g: 255, b: 255 },
+        rainbowStepMs: DEFAULT_RAINBOW_STEP_MS,
+        breathingMinPercent: DEFAULT_BREATHING_MIN_PERCENT,
+        breathingStepMs: DEFAULT_BREATHING_STEP_MS,
+      };
     });
-    const activeColors: LedColor[] = Array.from({ length: count }, () => ({ r: 255, g: 255, b: 255 }));
-    const activeModes: ActiveLedMode[] = Array.from({ length: count }, () => "Solid");
     return {
-      passiveModes,
-      passiveColors,
-      activeModes,
-      activeColors,
+      leds,
       brightnessPercent: 100,
-      rainbowStepMs: 20,
-      breathingMinPercent: 20,
-      breathingStepMs: 20,
     };
   }, [ledCountFromLayout]);
 
@@ -518,14 +358,51 @@ export default function KeypadFlasherApp() {
     if (!config) {
       throw new Error("Lighting configuration is required for this layout.");
     }
-    if (config.passiveModes.length !== count
-      || config.passiveColors.length !== count
-      || config.activeModes.length !== count
-      || config.activeColors.length !== count) {
+    if (config.leds.length !== count) {
       throw new Error(`Lighting configuration must have ${count} entries for this layout.`);
     }
     return config;
   }, [ledCountFromLayout]);
+
+  const {
+    showExportModal,
+    setShowExportModal,
+    showImportModal,
+    setShowImportModal,
+    exportText,
+    exportCopyStatus,
+    exportCopyFlash,
+    importText,
+    importError,
+    setImportText,
+    setImportError,
+    openExportModal,
+    handleExportCopy,
+    openImportModal,
+    applyImportedConfig,
+  } = useConfigImportExport({
+    currentBindings,
+    selectedLayout,
+    ledConfig,
+    selectedProfileName: selectedProfile?.name ?? null,
+    connectedInfo,
+    rememberedBootloaderId,
+    lastBootloaderIdRef,
+    assertLedConfigMatchesLayout,
+    setSelectedLayout,
+    setCurrentBindings,
+    setLedConfig,
+    showToast,
+    setStatus,
+  });
+
+  const exportModalClosing = useModalClosing(showExportModal, useCallback(() => setShowExportModal(false), [setShowExportModal]));
+  const importModalClosing = useModalClosing(showImportModal, useCallback(() => {
+    setShowImportModal(false);
+    setImportError("");
+  }, [setImportError, setShowImportModal]));
+  const { isClosing: exportModalClosingState, requestClose: requestExportModalClose, handleAnimationEnd: handleExportModalAnimationEnd } = exportModalClosing;
+  const { isClosing: importModalClosingState, requestClose: requestImportModalClose, handleAnimationEnd: handleImportModalAnimationEnd } = importModalClosing;
 
   const webUsbAvailable = CH55xBootloader.isWebUsbAvailable();
   const secure = typeof window !== "undefined" ? window.isSecureContext : true;
@@ -569,16 +446,25 @@ export default function KeypadFlasherApp() {
     const stored = loadStoredConfig(lastId);
     const nextLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
     const nextBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
-    setSelectedLayout(nextLayout);
-    setCurrentBindings(nextBindings);
     try {
       const pickedLedConfig = pickLedConfigForLayout(nextLayout, stored?.ledConfig ?? null);
       const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
+      setSelectedLayout(nextLayout);
+      setCurrentBindings(nextBindings);
       setLedConfig(validatedLedConfig);
     } catch (err) {
-      setStatus({ state: "error", detail: String((err as Error).message ?? err) });
+      clearStoredConfig(lastId);
+      const fallbackLayout = profile?.layout ? cloneLayout(profile.layout) : null;
+      const fallbackBindings = profile?.defaultBindings ?? null;
+      const pickedLedConfig = pickLedConfigForLayout(fallbackLayout, null);
+      const validatedLedConfig = assertLedConfigMatchesLayout(fallbackLayout, pickedLedConfig);
+      setSelectedLayout(fallbackLayout);
+      setCurrentBindings(fallbackBindings);
+      setLedConfig(validatedLedConfig);
+      showToast("Saved configuration was invalid and has been reset.", "warn", 5200);
+      setStatus({ state: "idle" });
     }
-  }, [assertLedConfigMatchesLayout, pickLedConfigForLayout]);
+  }, [assertLedConfigMatchesLayout, pickLedConfigForLayout, showToast]);
 
   const applyConnectedDevice = useCallback((info: ConnectedInfo, options: { source: "real" | "demo"; persistLastId: boolean }) => {
     const previousId = lastBootloaderIdRef.current;
@@ -598,30 +484,38 @@ export default function KeypadFlasherApp() {
     }
 
     const stored = loadStoredConfig(info.id);
-    if (!sameDevice || !selectedLayout) {
-      const nextLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
-      setSelectedLayout(nextLayout);
-    }
-
-    const nextBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
-    if (!sameDevice || !currentBindings) {
-      setCurrentBindings(nextBindings);
-    }
-
-    const nextLayout = (!sameDevice || !selectedLayout) ? (stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null)) : selectedLayout;
     try {
+      const loadedLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
+      const loadedBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
+      const nextLayout = (!sameDevice || !selectedLayout) ? loadedLayout : selectedLayout;
+      if (!sameDevice || !selectedLayout) {
+        setSelectedLayout(loadedLayout);
+      }
+      if (!sameDevice || !currentBindings) {
+        setCurrentBindings(loadedBindings);
+      }
       const pickedLedConfig = pickLedConfigForLayout(nextLayout, stored?.ledConfig ?? null);
       const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
       setLedConfig(validatedLedConfig);
     } catch (err) {
-      setStatus({ state: "error", detail: String((err as Error).message ?? err) });
+      clearStoredConfig(info.id);
+      const fallbackLayout = profile?.layout ? cloneLayout(profile.layout) : null;
+      const fallbackBindings = profile?.defaultBindings ?? null;
+      const nextLayout = fallbackLayout;
+      setSelectedLayout(fallbackLayout);
+      setCurrentBindings(fallbackBindings);
+      const pickedLedConfig = pickLedConfigForLayout(nextLayout, null);
+      const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
+      setLedConfig(validatedLedConfig);
+      showToast("Saved configuration was invalid and has been reset.", "warn", 5200);
+      setStatus({ state: "idle" });
     }
 
     const detail = profile
       ? `${options.source === "demo" ? "Demo: " : ""}${profile.name}`
       : (options.source === "demo" ? "Demo device" : undefined);
     setStatus(profile ? { state: "connectedKnown", detail } : { state: "connectedUnknown", detail });
-  }, [assertLedConfigMatchesLayout, currentBindings, pickLedConfigForLayout, selectedLayout]);
+  }, [assertLedConfigMatchesLayout, currentBindings, pickLedConfigForLayout, selectedLayout, showToast]);
 
   const restoreSavedConfig = useCallback(() => {
     const id = rememberedBootloaderId ?? lastBootloaderIdRef.current;
@@ -637,16 +531,25 @@ export default function KeypadFlasherApp() {
     const stored = loadStoredConfig(id);
     const nextLayout = stored?.layout ?? (profile?.layout ? cloneLayout(profile.layout) : null);
     const nextBindings = stored?.bindings ?? profile?.defaultBindings ?? null;
-    setSelectedLayout(nextLayout);
-    setCurrentBindings(nextBindings);
     try {
       const pickedLedConfig = pickLedConfigForLayout(nextLayout, stored?.ledConfig ?? null);
       const validatedLedConfig = assertLedConfigMatchesLayout(nextLayout, pickedLedConfig);
+      setSelectedLayout(nextLayout);
+      setCurrentBindings(nextBindings);
       setLedConfig(validatedLedConfig);
     } catch (err) {
-      setStatus({ state: "error", detail: String((err as Error).message ?? err) });
+      clearStoredConfig(id);
+      const fallbackLayout = profile?.layout ? cloneLayout(profile.layout) : null;
+      const fallbackBindings = profile?.defaultBindings ?? null;
+      const pickedLedConfig = pickLedConfigForLayout(fallbackLayout, null);
+      const validatedLedConfig = assertLedConfigMatchesLayout(fallbackLayout, pickedLedConfig);
+      setSelectedLayout(fallbackLayout);
+      setCurrentBindings(fallbackBindings);
+      setLedConfig(validatedLedConfig);
+      showToast("Saved configuration was invalid and has been reset.", "warn", 5200);
+      setStatus({ state: "idle" });
     }
-  }, [assertLedConfigMatchesLayout, pickLedConfigForLayout, rememberedBootloaderId]);
+  }, [assertLedConfigMatchesLayout, pickLedConfigForLayout, rememberedBootloaderId, showToast]);
 
   const disconnectClient = useCallback(async (nextStatus?: Status, reboot?: boolean) => {
     const client = clientRef.current;
@@ -1033,178 +936,23 @@ export default function KeypadFlasherApp() {
     return { r, g, b };
   };
 
-  const cloneLedConfig = (config: LedConfigurationDto): LedConfigurationDto => ({
-    passiveModes: [...config.passiveModes],
-    passiveColors: [...config.passiveColors],
-    activeModes: [...config.activeModes],
-    activeColors: [...config.activeColors],
-    brightnessPercent: config.brightnessPercent,
-    rainbowStepMs: config.rainbowStepMs,
-    breathingMinPercent: config.breathingMinPercent,
-    breathingStepMs: config.breathingStepMs,
-  });
-
   const ledDisplayName = (idx: number): string => {
     const btn = userButtons.find((b) => b.ledIndex === idx);
     if (btn) return `Button ${btn.id + 1}`;
     return `Unmapped LED ${idx + 1}`;
   };
-
-  const openExportModal = useCallback(() => {
-    if (!currentBindings) {
-      setStatus({ state: "error", detail: "Nothing to export yet. Connect a device and load bindings first." });
-      return;
-    }
-    if (!selectedLayout) {
-      setStatus({ state: "error", detail: "Layout not ready yet. Connect a device before exporting." });
-      return;
-    }
-    const targetId = connectedInfo?.id ?? rememberedBootloaderId ?? lastBootloaderIdRef.current;
-    if (!targetId) {
-      setStatus({ state: "error", detail: "Connect a device before exporting." });
-      return;
-    }
-    try {
-      const payload = {
-        version: 1,
-        deviceId: targetId,
-        profile: selectedProfile?.name ?? null,
-        exportedAt: new Date().toISOString(),
-        bindings: currentBindings,
-        bootloaderConfig: bootloaderConfigFromLayout(selectedLayout),
-        ledConfig: assertLedConfigMatchesLayout(selectedLayout, ledConfig),
-      };
-      const text = JSON.stringify(payload, null, 2);
-      setExportText(text);
-      setExportCopyStatus("Click the code to copy.");
-      setShowExportModal(true);
-    } catch (err) {
-      setStatus({ state: "error", detail: String((err as Error).message ?? err) });
-    }
-  }, [assertLedConfigMatchesLayout, connectedInfo, currentBindings, ledConfig, rememberedBootloaderId, selectedLayout, selectedProfile]);
-
-  const handleExportCopy = useCallback(async () => {
-    if (!exportText) return;
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(exportText);
-        setExportCopyStatus("Copied to clipboard.");
-        setExportCopyFlash(true);
-        window.setTimeout(() => setExportCopyFlash(false), 220);
-        showToast("Export copied", "success", 2600);
-        return;
-      }
-      setExportCopyStatus("Clipboard not available. Copy manually.");
-      showToast("Clipboard not available. Copy manually.", "warn", 3200);
-    } catch (err) {
-      setExportCopyStatus(`Copy failed: ${String((err as Error).message ?? err)}`);
-      showToast("Copy failed", "error", 3200);
-    }
-  }, [exportText, showToast]);
-
-  const openImportModal = useCallback(() => {
-    setImportText("");
-    setImportError("");
-    setShowImportModal(true);
-  }, []);
-
-  const parseImportedConfig = useCallback((text: string) => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw new Error("Invalid JSON. Paste a configuration export.");
-    }
-    if (!parsed || typeof parsed !== "object") {
-      throw new Error("Unsupported configuration format.");
-    }
-    const parsedConfig = parsed as {
-      version?: unknown;
-      deviceId?: unknown;
-      bindings?: unknown;
-      bootloaderConfig?: unknown;
-      ledConfig?: unknown;
-    };
-    const version = parsedConfig.version ?? 1;
-    if (version !== 1) {
-      throw new Error("Unsupported configuration format.");
-    }
-    const targetId = connectedInfo?.id ?? rememberedBootloaderId ?? lastBootloaderIdRef.current;
-    if (!targetId) throw new Error("Connect a device before importing.");
-    const rawId = parsedConfig.deviceId ?? null;
-    if (!Array.isArray(rawId) || !rawId.every((n): n is number => typeof n === "number")) {
-      throw new Error("Import missing device id.");
-    }
-    if (!sameBootloaderId(rawId, targetId)) {
-      throw new Error("This configuration is for a different device. Connect the matching device to import.");
-    }
-    const bindings = parsedConfig.bindings ? validateBindingProfileCandidate(parsedConfig.bindings) : null;
-    if (!bindings) throw new Error("Import is missing bindings.");
-    const baseLayout = selectedLayout ? cloneLayout(selectedLayout) : null;
-    if (!baseLayout) throw new Error("Layout not loaded for this device. Connect again and retry import.");
-
-    const bootCfg = parsedConfig.bootloaderConfig ? validateBootloaderConfigCandidate(parsedConfig.bootloaderConfig) : null;
-    if (!bootCfg) throw new Error("Import missing bootloader configuration.");
-    const layoutWithBootloader = applyBootloaderConfigToLayout(baseLayout, bootCfg);
-
-    const ledCfg = parsedConfig.ledConfig ? validateLedConfigCandidate(parsedConfig.ledConfig) : null;
-    const validatedLed = assertLedConfigMatchesLayout(layoutWithBootloader, ledCfg);
-    return { bindings, ledConfig: validatedLed, layout: layoutWithBootloader };
-  }, [assertLedConfigMatchesLayout, connectedInfo, rememberedBootloaderId, selectedLayout]);
-
-  const applyImportedConfig = useCallback((text: string) => {
-    try {
-      const next = parseImportedConfig(text);
-      setSelectedLayout(next.layout);
-      setCurrentBindings(next.bindings);
-      setLedConfig(next.ledConfig);
-      const targetId = connectedInfo?.id ?? rememberedBootloaderId ?? lastBootloaderIdRef.current;
-      if (targetId) {
-        saveStoredConfig(targetId, { bindings: next.bindings, layout: next.layout, ledConfig: next.ledConfig });
-      }
-      requestImportModalClose();
-      setImportError("");
-      showToast("Configuration imported", "success", 20000);
-    } catch (err) {
-      setImportError(String((err as Error).message ?? err));
-    }
-  }, [parseImportedConfig, connectedInfo, rememberedBootloaderId, selectedLayout, showToast]);
-
-  const closeGlobalLightingModal = () => {
-    requestGlobalLightingClose();
-  };
-
-  const saveGlobalLightingModal = () => {
-    if (draftLedConfig) {
-      setLedConfig(draftLedConfig);
-    }
-    closeGlobalLightingModal();
-  };
-
-  const openGlobalLightingModal = () => {
-    if (!ledConfig) return;
-    setDraftLedConfig(cloneLedConfig(ledConfig));
-    setLightingStatus(defaultLightingStatus);
-    setFocusLedIndex(null);
-    setShowGlobalLightingModal(true);
-  };
-
-  const closeLightingModal = () => {
-    requestLightingClose();
-  };
-  const saveLightingModal = () => {
-    if (draftLedConfig) {
-      setLedConfig(draftLedConfig);
-    }
-    closeLightingModal();
-  };
   const openLightingForLed = (idx: number) => {
-    if (!ledConfig || idx < 0 || idx >= ledConfig.passiveColors.length) return;
-    setDraftLedConfig(cloneLedConfig(ledConfig));
-    setLightingStatus(defaultLightingStatus);
-    setFocusLedIndex(idx);
-    setShowLightingModal(true);
+    if (!ledConfig || idx < 0 || idx >= ledConfig.leds.length) return;
+    openLightingModal(ledConfig, idx);
   };
+
+  const openGlobalLighting = useCallback(() => {
+    if (!ledConfig) {
+      showToast("No lighting configuration available for this layout.", "warn", 3600);
+      return;
+    }
+    openGlobalLightingModal();
+  }, [ledConfig, openGlobalLightingModal, showToast]);
 
   useEffect(() => {
     if (!showLightingModal) return;
@@ -1215,105 +963,6 @@ export default function KeypadFlasherApp() {
     }
   }, [showLightingModal, focusLedIndex]);
 
-  const setPassiveColor = (idx: number, color: LedColor) => {
-    setDraftLedConfig((prev) => {
-      if (!prev || idx < 0 || idx >= prev.passiveColors.length) return prev;
-      const next = [...prev.passiveColors];
-      next[idx] = color;
-      return { ...prev, passiveColors: next };
-    });
-  };
-
-  const setPassiveModeForLed = (idx: number, mode: PassiveLedMode) => {
-    setDraftLedConfig((prev) => {
-      if (!prev || idx < 0 || idx >= prev.passiveModes.length) return prev;
-      const passiveModes = [...prev.passiveModes];
-      passiveModes[idx] = mode;
-      return { ...prev, passiveModes };
-    });
-  };
-  const setActiveMode = (idx: number, mode: ActiveLedMode) => {
-    setDraftLedConfig((prev) => {
-      if (!prev || idx < 0 || idx >= prev.activeModes.length) return prev;
-      const next = [...prev.activeModes];
-      next[idx] = mode;
-      return { ...prev, activeModes: next };
-    });
-  };
-
-  const setActiveColor = (idx: number, color: LedColor) => {
-    setDraftLedConfig((prev) => {
-      if (!prev || idx < 0 || idx >= prev.activeColors.length) return prev;
-      const next = [...prev.activeColors];
-      next[idx] = color;
-      return { ...prev, activeColors: next };
-    });
-  };
-
-  const setBrightnessPercent = (value: number) => {
-    setDraftLedConfig((prev) => (prev ? { ...prev, brightnessPercent: value } : prev));
-  };
-
-  const setRainbowStepMs = (value: number) => {
-    setDraftLedConfig((prev) => (prev ? { ...prev, rainbowStepMs: value } : prev));
-  };
-
-  const setBreathingMinPercent = (value: number) => {
-    setDraftLedConfig((prev) => (prev ? { ...prev, breathingMinPercent: value } : prev));
-  };
-
-  const setBreathingStepMs = (value: number) => {
-    setDraftLedConfig((prev) => (prev ? { ...prev, breathingStepMs: value } : prev));
-  };
-
-  const [lightingStatus, setLightingStatus] = useState<string>(defaultLightingStatus);
-
-  const copyLedLighting = (idx: number) => {
-    const source = draftLedConfig;
-    if (!source || idx < 0 || idx >= source.passiveColors.length || idx >= source.activeModes.length || idx >= source.activeColors.length || idx >= source.passiveModes.length) return;
-    const label = ledDisplayName(idx);
-    setCopiedLedLighting({
-      passiveMode: source.passiveModes[idx],
-      passive: source.passiveColors[idx],
-      activeMode: source.activeModes[idx],
-      activeColor: source.activeColors[idx],
-    });
-    setLightingStatus(`Copied lighting from ${label}. Paste or apply to all.`);
-  };
-
-  const pasteLedLighting = (idx: number) => {
-    setDraftLedConfig((prev) => {
-      if (!prev || !copiedLedLighting || idx < 0 || idx >= prev.passiveColors.length || idx >= prev.activeModes.length || idx >= prev.activeColors.length || idx >= prev.passiveModes.length) return prev;
-      const passiveColors = [...prev.passiveColors];
-      const passiveModes = [...prev.passiveModes];
-      const activeModes = [...prev.activeModes];
-      const activeColors = [...prev.activeColors];
-      passiveModes[idx] = copiedLedLighting.passiveMode;
-      passiveColors[idx] = copiedLedLighting.passive;
-      activeModes[idx] = copiedLedLighting.activeMode;
-      activeColors[idx] = copiedLedLighting.activeColor;
-      return { ...prev, passiveModes, passiveColors, activeModes, activeColors };
-    });
-    setLightingStatus(`Pasted lighting to ${ledDisplayName(idx)}.`);
-  };
-
-  const applyLightingToAll = (sourceIdx: number) => {
-    setDraftLedConfig((prev) => {
-      if (!prev || sourceIdx < 0 || sourceIdx >= prev.passiveColors.length || sourceIdx >= prev.activeModes.length || sourceIdx >= prev.activeColors.length || sourceIdx >= prev.passiveModes.length) return prev;
-      const passiveMode = prev.passiveModes[sourceIdx];
-      const passive = prev.passiveColors[sourceIdx];
-      const activeMode = prev.activeModes[sourceIdx];
-      const activeColor = prev.activeColors[sourceIdx];
-      return {
-        ...prev,
-        passiveModes: prev.passiveModes.map(() => passiveMode),
-        passiveColors: prev.passiveColors.map(() => passive),
-        activeModes: prev.activeModes.map(() => activeMode),
-        activeColors: prev.activeColors.map(() => activeColor),
-      };
-    });
-    setLightingStatus(`Applied lighting from ${ledDisplayName(sourceIdx)} to all.`);
-  };
 
   const handleEditorSave = (binding: HidBindingDto) => {
     if (!editorTarget || !currentBindings) return;
@@ -1624,7 +1273,7 @@ export default function KeypadFlasherApp() {
             warnSingleChord={warnSingleChord}
             onEdit={openEdit}
             onOpenLightingForLed={openLightingForLed}
-            onOpenLightingSettings={openGlobalLightingModal}
+            onOpenLightingSettings={openGlobalLighting}
             lightingDisabled={!ledConfig || layoutLedCount === 0}
             onToggleBootloaderOnBoot={updateBootloaderOnBoot}
             onToggleBootloaderChord={updateBootloaderChordMember}
@@ -1727,7 +1376,7 @@ export default function KeypadFlasherApp() {
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) closeGlobalLightingModal();
+              if (e.target === e.currentTarget) requestGlobalLightingClose();
             }}
             onAnimationEnd={(e) => handleGlobalLightingAnimationEnd(e.animationName)}
           >
@@ -1763,7 +1412,7 @@ export default function KeypadFlasherApp() {
                 )}
               </div>
               <div className="modal-actions">
-                <button className="btn" onClick={closeGlobalLightingModal}>Cancel</button>
+                <button className="btn" onClick={requestGlobalLightingClose}>Cancel</button>
                 <button className="btn btn-primary" onClick={saveGlobalLightingModal} disabled={!draftLedConfig}>Save</button>
               </div>
             </div>
@@ -1777,7 +1426,7 @@ export default function KeypadFlasherApp() {
             aria-modal="true"
             onClick={(e) => {
               if (modalPointerDownRef.current) { modalPointerDownRef.current = false; return; }
-              if (e.target === e.currentTarget) closeLightingModal();
+              if (e.target === e.currentTarget) requestLightingClose();
             }}
             onAnimationEnd={(e) => handleLightingAnimationEnd(e.animationName)}
           >
@@ -1791,7 +1440,7 @@ export default function KeypadFlasherApp() {
               <div className="modal-header">
                 {(() => {
                   const target = focusLedIndex != null ? focusLedIndex : 0;
-                  const maxIdx = draftLedConfig?.passiveColors.length ?? 0;
+                  const maxIdx = draftLedConfig?.leds.length ?? 0;
                   const clamped = maxIdx > 0 ? Math.min(Math.max(target, 0), maxIdx - 1) : 0;
                   const title = maxIdx > 0 ? `Edit ${ledDisplayName(clamped)} Lighting` : "Lighting";
                   return <div className="modal-title">{title}</div>;
@@ -1801,7 +1450,7 @@ export default function KeypadFlasherApp() {
                 {renderLightingBody()}
               </div>
               <div className="modal-actions">
-                <button className="btn" onClick={closeLightingModal}>Cancel</button>
+                <button className="btn" onClick={requestLightingClose}>Cancel</button>
                 <button className="btn btn-primary" onClick={saveLightingModal} disabled={!draftLedConfig}>Save</button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Linq;
 
 namespace Keypad.Flasher.Server.Configuration
 {
@@ -128,25 +129,29 @@ namespace Keypad.Flasher.Server.Configuration
             if (neoPixelCount <= 0)
             {
                 sb.AppendLine("const led_configuration_t led_configuration = {");
-                AppendLine(sb, 1, ".passive_modes = 0,");
-                AppendLine(sb, 1, ".passive_colors = 0,");
-                AppendLine(sb, 1, ".active_modes = 0,");
-                AppendLine(sb, 1, ".active_colors = 0,");
                 AppendLine(sb, 1, ".count = 0,");
                 AppendLine(sb, 1, ".brightness_percent = 0,");
                 AppendLine(sb, 1, ".rainbow_step_ms = 0,");
                 AppendLine(sb, 1, ".breathing_min_percent = 0,");
-                AppendLine(sb, 1, ".breathing_step_ms = 0");
+                AppendLine(sb, 1, ".breathing_step_ms = 0,");
+                AppendLine(sb, 1, ".passive_modes = 0,");
+                AppendLine(sb, 1, ".passive_colors = 0,");
+                AppendLine(sb, 1, ".active_modes = 0,");
+                AppendLine(sb, 1, ".active_colors = 0");
                 AppendLine(sb, 0, "};");
                 return;
             }
 
             var led = configuration.LedConfig ?? throw new InvalidOperationException("LED configuration missing.");
+            if (led.Leds.Count != neoPixelCount)
+            {
+                throw new InvalidOperationException("LED configuration count does not match neopixel count.");
+            }
 
             AppendLine(sb, 0, "static const led_passive_mode_t led_passive_modes[] = {");
             for (int i = 0; i < neoPixelCount; i++)
             {
-                var modeLiteral = ToPassiveModeLiteral(led.PassiveModes[i]);
+                var modeLiteral = ToPassiveModeLiteral(led.Leds[i].PassiveMode);
                 var tail = i == neoPixelCount - 1 ? string.Empty : ",";
                 AppendLine(sb, 1, modeLiteral + tail);
             }
@@ -154,7 +159,7 @@ namespace Keypad.Flasher.Server.Configuration
             AppendLine(sb, 0, "static const led_rgb_t led_passive_colors[] = {");
             for (int i = 0; i < neoPixelCount; i++)
             {
-                var color = led.PassiveColors[i];
+                var color = led.Leds[i].PassiveColor;
                 var tail = i == neoPixelCount - 1 ? string.Empty : ",";
                 AppendLine(sb, 1, $"{{ .r = {color.R}, .g = {color.G}, .b = {color.B} }}{tail}");
             }
@@ -162,7 +167,7 @@ namespace Keypad.Flasher.Server.Configuration
             AppendLine(sb, 0, "static const led_active_mode_t led_active_modes[] = {");
             for (int i = 0; i < neoPixelCount; i++)
             {
-                var modeLiteral = ToActiveModeLiteral(led.ActiveModes[i]);
+                var modeLiteral = ToActiveModeLiteral(led.Leds[i].ActiveMode);
                 var tail = i == neoPixelCount - 1 ? string.Empty : ",";
                 AppendLine(sb, 1, modeLiteral + tail);
             }
@@ -170,21 +175,45 @@ namespace Keypad.Flasher.Server.Configuration
             AppendLine(sb, 0, "static const led_rgb_t led_active_colors[] = {");
             for (int i = 0; i < neoPixelCount; i++)
             {
-                var color = led.ActiveColors[i];
+                var color = led.Leds[i].ActiveColor;
                 var tail = i == neoPixelCount - 1 ? string.Empty : ",";
                 AppendLine(sb, 1, $"{{ .r = {color.R}, .g = {color.G}, .b = {color.B} }}{tail}");
             }
             AppendLine(sb, 0, "};");
+            AppendLine(sb, 0, "static const uint8_t led_rainbow_step_ms[] = {");
+            for (int i = 0; i < neoPixelCount; i++)
+            {
+                var timing = led.Leds[i].Timing ?? new LedTiming();
+                var tail = i == neoPixelCount - 1 ? string.Empty : ",";
+                AppendLine(sb, 1, $"{timing.RainbowStepMs}{tail}");
+            }
+            AppendLine(sb, 0, "};");
+            AppendLine(sb, 0, "static const uint8_t led_breathing_min_percent[] = {");
+            for (int i = 0; i < neoPixelCount; i++)
+            {
+                var timing = led.Leds[i].Timing ?? new LedTiming();
+                var tail = i == neoPixelCount - 1 ? string.Empty : ",";
+                AppendLine(sb, 1, $"{timing.BreathingMinPercent}{tail}");
+            }
+            AppendLine(sb, 0, "};");
+            AppendLine(sb, 0, "static const uint8_t led_breathing_step_ms[] = {");
+            for (int i = 0; i < neoPixelCount; i++)
+            {
+                var timing = led.Leds[i].Timing ?? new LedTiming();
+                var tail = i == neoPixelCount - 1 ? string.Empty : ",";
+                AppendLine(sb, 1, $"{timing.BreathingStepMs}{tail}");
+            }
+            AppendLine(sb, 0, "};");
             sb.AppendLine("const led_configuration_t led_configuration = {");
+            AppendLine(sb, 1, $".count = {neoPixelCount},");
+            AppendLine(sb, 1, $".brightness_percent = {led.BrightnessPercent},");
+            AppendLine(sb, 1, $".rainbow_step_ms = led_rainbow_step_ms,");
+            AppendLine(sb, 1, $".breathing_min_percent = led_breathing_min_percent,");
+            AppendLine(sb, 1, $".breathing_step_ms = led_breathing_step_ms,");
             AppendLine(sb, 1, ".passive_modes = led_passive_modes,");
             AppendLine(sb, 1, ".passive_colors = led_passive_colors,");
             AppendLine(sb, 1, ".active_modes = led_active_modes,");
-            AppendLine(sb, 1, ".active_colors = led_active_colors,");
-            AppendLine(sb, 1, $".count = {neoPixelCount},");
-            AppendLine(sb, 1, $".brightness_percent = {led.BrightnessPercent},");
-            AppendLine(sb, 1, $".rainbow_step_ms = {led.RainbowStepMs},");
-            AppendLine(sb, 1, $".breathing_min_percent = {led.BreathingMinPercent},");
-            AppendLine(sb, 1, $".breathing_step_ms = {led.BreathingStepMs}");
+            AppendLine(sb, 1, ".active_colors = led_active_colors");
             AppendLine(sb, 0, "};");
         }
 

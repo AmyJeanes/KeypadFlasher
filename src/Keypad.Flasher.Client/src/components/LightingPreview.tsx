@@ -7,9 +7,9 @@ type LightingPreviewProps = {
   passiveColor: LedColor;
   activeMode?: ActiveLedMode;
   activeColor?: LedColor;
-  rainbowStepMs?: number;
-  breathingMinPercent?: number;
-  breathingStepMs?: number;
+  rainbowStepMs?: number | number[];
+  breathingMinPercent?: number | number[];
+  breathingStepMs?: number | number[];
   ledIndex?: number;
   size?: "sm" | "md";
   interactive?: boolean;

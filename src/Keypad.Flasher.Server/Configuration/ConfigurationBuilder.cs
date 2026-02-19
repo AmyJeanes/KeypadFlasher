@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace Keypad.Flasher.Server.Configuration
 {
@@ -167,14 +168,8 @@ namespace Keypad.Flasher.Server.Configuration
             if (ledCount <= 0)
             {
                 return new LedConfiguration(
-                    PassiveModes: Array.Empty<PassiveLedMode>(),
-                    PassiveColors: Array.Empty<LedColor>(),
-                    ActiveModes: Array.Empty<ActiveLedMode>(),
-                    ActiveColors: Array.Empty<LedColor>(),
-                    BrightnessPercent: 0,
-                    RainbowStepMs: 0,
-                    BreathingMinPercent: 0,
-                    BreathingStepMs: 0);
+                    Leds: Array.Empty<LedPerKey>(),
+                    BrightnessPercent: 0);
             }
 
             if (input == null)
@@ -182,15 +177,28 @@ namespace Keypad.Flasher.Server.Configuration
                 throw new ArgumentException("LED configuration required for layouts with LEDs.", nameof(input));
             }
 
-            if (input.PassiveModes.Count != ledCount
-                || input.PassiveColors.Count != ledCount
-                || input.ActiveModes.Count != ledCount
-                || input.ActiveColors.Count != ledCount)
+            if (input.Leds.Count != ledCount)
             {
-                throw new ArgumentException($"LED configuration must contain {ledCount} entries for each LED field.");
+                throw new ArgumentException($"LED configuration must contain {ledCount} LED entries.");
             }
 
-            return input;
+            var normalizedLeds = input.Leds
+                .Select(NormalizeLedTiming)
+                .ToList();
+
+            return new LedConfiguration(
+                Leds: normalizedLeds,
+                BrightnessPercent: input.BrightnessPercent);
+        }
+
+        private static LedPerKey NormalizeLedTiming(LedPerKey led)
+        {
+            var timing = led.Timing ?? new LedTiming();
+            var rainbow = led.RainbowStepMs ?? timing.RainbowStepMs;
+            var breathingMin = led.BreathingMinPercent ?? timing.BreathingMinPercent;
+            var breathingStep = led.BreathingStepMs ?? timing.BreathingStepMs;
+
+            return led with { Timing = new LedTiming(rainbow, breathingMin, breathingStep) };
         }
   }
 }

@@ -13,11 +13,11 @@ static const led_configuration_t *led_cfg_s = &led_configuration;
 static bool pressed_s[NEO_COUNT] = {0};      // pressed state per logical LED
 static const uint8_t LED_RAINBOW_DEFAULT_STEP_MS = 20;
 static const uint8_t LED_BREATH_DEFAULT_STEP_MS = 20;
-static uint32_t last_rainbow_step_ms_s = 0;
-static uint32_t last_breath_step_ms_s = 0;
-static uint8_t breath_percent_s = 100; // 0..100%
-static bool breath_descending_s = true;
-static uint8_t rainbow_phase_s = 0; // shared hue phase for rolling rainbow
+static uint32_t last_rainbow_step_ms_s[NEO_COUNT] = {0};
+static uint8_t rainbow_phase_s[NEO_COUNT] = {0};
+static uint32_t last_breath_step_ms_s[NEO_COUNT] = {0};
+static uint8_t breath_percent_s[NEO_COUNT] = {0}; // 0..100%
+static bool breath_descending_s[NEO_COUNT] = {0};
 
 static uint8_t led_count(void)
 {
@@ -34,21 +34,33 @@ static uint8_t brightness_percent(void)
   return clamp_percent(led_cfg_s->brightness_percent);
 }
 
-static uint8_t rainbow_step_ms(void)
+static uint8_t rainbow_step_ms_for(uint8_t led)
 {
-  const uint8_t configured = led_cfg_s->rainbow_step_ms;
+  if (led_cfg_s->rainbow_step_ms == 0)
+  {
+    return LED_RAINBOW_DEFAULT_STEP_MS;
+  }
+  const uint8_t configured = led_cfg_s->rainbow_step_ms[led];
   return configured == 0 ? LED_RAINBOW_DEFAULT_STEP_MS : configured;
 }
 
-static uint8_t breathing_min_percent(void)
+static uint8_t breathing_min_percent_for(uint8_t led)
 {
-  const uint8_t configured = led_cfg_s->breathing_min_percent;
+  if (led_cfg_s->breathing_min_percent == 0)
+  {
+    return 0;
+  }
+  const uint8_t configured = led_cfg_s->breathing_min_percent[led];
   return clamp_percent(configured);
 }
 
-static uint8_t breathing_step_ms(void)
+static uint8_t breathing_step_ms_for(uint8_t led)
 {
-  const uint8_t configured = led_cfg_s->breathing_step_ms;
+  if (led_cfg_s->breathing_step_ms == 0)
+  {
+    return LED_BREATH_DEFAULT_STEP_MS;
+  }
+  const uint8_t configured = led_cfg_s->breathing_step_ms[led];
   return configured == 0 ? LED_BREATH_DEFAULT_STEP_MS : configured;
 }
 
@@ -128,11 +140,16 @@ void led_show_bootloader_indicator(void)
 
 void led_init(void)
 {
-  rainbow_phase_s = 0;
-  last_rainbow_step_ms_s = millis();
-  last_breath_step_ms_s = millis();
-  breath_percent_s = 100;
-  breath_descending_s = true;
+  const uint32_t now = millis();
+  const uint8_t count = led_count();
+  for (uint8_t i = 0; i < count; ++i)
+  {
+    rainbow_phase_s[i] = (uint8_t)((i * 8) % 192); // start spread across hue wheel
+    last_rainbow_step_ms_s[i] = now;
+    last_breath_step_ms_s[i] = now;
+    breath_percent_s[i] = 100;
+    breath_descending_s[i] = true;
+  }
 }
 
 void led_set_key_state(int key, bool pressed)
@@ -148,99 +165,78 @@ void led_set_key_state(int key, bool pressed)
 void led_update()
 {
   const uint8_t count = led_count();
-  bool has_rainbow = false;
-  bool has_breathing = false;
-  for (uint8_t i = 0; i < count; ++i)
-  {
-    const led_passive_mode_t mode = passive_mode_for(i);
-    if (mode == LED_PASSIVE_RAINBOW)
-    {
-      has_rainbow = true;
-    }
-    if (mode == LED_PASSIVE_BREATHING)
-    {
-      has_breathing = true;
-    }
-    if (has_rainbow && has_breathing)
-    {
-      break;
-    }
-  }
-
   const uint32_t now = millis();
-  if (has_rainbow)
+  for (uint8_t led = 0; led < count; ++led)
   {
-    const uint8_t step_ms = rainbow_step_ms();
-    const uint16_t elapsed = (uint16_t)(now - last_rainbow_step_ms_s);
-    if (elapsed >= step_ms)
+    const led_passive_mode_t passive_mode = passive_mode_for(led);
+
+    if (passive_mode == LED_PASSIVE_RAINBOW)
     {
-      uint16_t remaining = elapsed;
-      uint8_t steps = 0;
-      while (remaining >= step_ms && steps < 64)
+      const uint8_t step_ms = rainbow_step_ms_for(led);
+      const uint16_t elapsed = (uint16_t)(now - last_rainbow_step_ms_s[led]);
+      if (elapsed >= step_ms)
       {
-        remaining -= step_ms;
-        steps++;
-      }
-      last_rainbow_step_ms_s = now - remaining;
-      uint16_t phase = (uint16_t)rainbow_phase_s + steps;
-      if (phase >= 192)
-      {
-        phase -= 192;
-        if (phase >= 192)
+        uint16_t remaining = elapsed;
+        uint8_t steps = 0;
+        while (remaining >= step_ms && steps < 64)
+        {
+          remaining -= step_ms;
+          steps++;
+        }
+        last_rainbow_step_ms_s[led] = now - remaining;
+        uint16_t phase = (uint16_t)rainbow_phase_s[led] + steps;
+        while (phase >= 192)
         {
           phase -= 192;
         }
+        rainbow_phase_s[led] = (uint8_t)phase;
       }
-      rainbow_phase_s = (uint8_t)phase;
     }
-  }
 
-  if (has_breathing)
-  {
-    const uint8_t step_ms = breathing_step_ms();
-    const uint16_t elapsed = (uint16_t)(now - last_breath_step_ms_s);
-    if (elapsed >= step_ms)
+    if (passive_mode == LED_PASSIVE_BREATHING)
     {
-      uint16_t remaining_ms = elapsed;
-      uint8_t steps = 0;
-      while (remaining_ms >= step_ms && steps < 200)
+      const uint8_t step_ms = breathing_step_ms_for(led);
+      const uint16_t elapsed = (uint16_t)(now - last_breath_step_ms_s[led]);
+      if (elapsed >= step_ms)
       {
-        remaining_ms -= step_ms;
-        steps++;
-      }
-      last_breath_step_ms_s = now - remaining_ms;
-      const uint8_t min_percent = breathing_min_percent();
-      while (steps > 0)
-      {
-        if (breath_descending_s)
+        uint16_t remaining_ms = elapsed;
+        uint8_t steps = 0;
+        while (remaining_ms >= step_ms && steps < 200)
         {
-          if (breath_percent_s > min_percent)
+          remaining_ms -= step_ms;
+          steps++;
+        }
+        last_breath_step_ms_s[led] = now - remaining_ms;
+        const uint8_t min_percent = breathing_min_percent_for(led);
+        while (steps > 0)
+        {
+          if (breath_descending_s[led])
           {
-            breath_percent_s -= 1;
+            if (breath_percent_s[led] > min_percent)
+            {
+              breath_percent_s[led] -= 1;
+            }
+            else
+            {
+              breath_descending_s[led] = false;
+            }
           }
           else
           {
-            breath_descending_s = false;
+            if (breath_percent_s[led] < 100)
+            {
+              breath_percent_s[led] += 1;
+            }
+            else
+            {
+              breath_descending_s[led] = true;
+            }
           }
+          steps--;
         }
-        else
-        {
-          if (breath_percent_s < 100)
-          {
-            breath_percent_s += 1;
-          }
-          else
-          {
-            breath_descending_s = true;
-          }
-        }
-        steps--;
       }
     }
-  }
 
-  for (uint8_t led = 0; led < count; ++led)
-  {
     const uint8_t physical = led_physical_index(led);
     if (pressed_s[led])
     {
@@ -259,7 +255,7 @@ void led_update()
       // LED_ACTIVE_NOTHING falls through to passive rendering
     }
 
-    switch (passive_mode_for(led))
+    switch (passive_mode)
     {
     case LED_PASSIVE_OFF:
       NEO_writeColor(physical, 0, 0, 0);
@@ -273,21 +269,15 @@ void led_update()
     case LED_PASSIVE_BREATHING:
       {
         const led_rgb_t *color = &led_cfg_s->passive_colors[led];
-        write_scaled_color(physical, color, breath_percent_s);
+        write_scaled_color(physical, color, breath_percent_s[led]);
       }
       break;
     case LED_PASSIVE_RAINBOW:
     default:
       {
-        // Single shared hue that rolls across LEDs using a small per-LED phase offset.
-        const uint8_t hue_offset = (uint8_t)((led * 8) % 192); // spread colors across keys
-        uint16_t hue = (uint16_t)rainbow_phase_s + hue_offset;
-        if (hue >= 192)
-        {
-          hue -= 192;
-        }
+        const uint8_t hue = rainbow_phase_s[led];
         led_rgb_t hue_color;
-        hue_to_rgb((uint8_t)hue, &hue_color);
+        hue_to_rgb(hue, &hue_color);
         write_scaled_color(physical, &hue_color, 100);
       }
       break;

@@ -30,7 +30,12 @@ export const loadStoredConfig = (bootloaderId: number[]): StoredConfig | null =>
       };
     }
   } catch {
-    // ignore parse/storage errors
+    // clear corrupted entry so a fresh default can be used next time
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // ignore storage errors
+    }
   }
   return null;
 };
@@ -44,6 +49,16 @@ export const saveStoredConfig = (bootloaderId: number[], config: StoredConfig) =
     } else {
       window.localStorage.removeItem(key);
     }
+  } catch {
+    // ignore storage errors
+  }
+};
+
+export const clearStoredConfig = (bootloaderId: number[]) => {
+  if (!storageAvailable) return;
+  const key = `${STORAGE_PREFIX}:${bootloaderId.join("-")}`;
+  try {
+    window.localStorage.removeItem(key);
   } catch {
     // ignore storage errors
   }

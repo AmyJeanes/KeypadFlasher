@@ -119,15 +119,24 @@ namespace Keypad.Flasher.Server.Configuration
 
     public sealed record LedColor(byte R, byte G, byte B);
 
-    public sealed record LedConfiguration(
-        IReadOnlyList<PassiveLedMode> PassiveModes,
-        IReadOnlyList<LedColor> PassiveColors,
-        IReadOnlyList<ActiveLedMode> ActiveModes,
-        IReadOnlyList<LedColor> ActiveColors,
-        byte BrightnessPercent = 100,
+    public sealed record LedTiming(
         byte RainbowStepMs = 20,
         byte BreathingMinPercent = 20,
         byte BreathingStepMs = 20);
+
+    public sealed record LedPerKey(
+        PassiveLedMode PassiveMode,
+        LedColor PassiveColor,
+        ActiveLedMode ActiveMode,
+        LedColor ActiveColor,
+        LedTiming? Timing = null,
+        byte? RainbowStepMs = null,
+        byte? BreathingMinPercent = null,
+        byte? BreathingStepMs = null);
+
+    public sealed record LedConfiguration(
+        IReadOnlyList<LedPerKey> Leds,
+        byte BrightnessPercent = 100);
 
     public sealed record DebugOptions(
         bool EnableNoiseFilter = true,

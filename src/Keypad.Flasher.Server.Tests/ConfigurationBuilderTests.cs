@@ -39,14 +39,13 @@ namespace Keypad.Flasher.Server.Tests
                 });
 
             var ledConfig = new LedConfiguration(
-                PassiveModes: new[] { PassiveLedMode.Rainbow, PassiveLedMode.Rainbow, PassiveLedMode.Rainbow },
-                PassiveColors: new[] { new LedColor(255, 0, 0), new LedColor(255, 255, 0), new LedColor(0, 255, 0) },
-                ActiveModes: new[] { ActiveLedMode.Solid, ActiveLedMode.Solid, ActiveLedMode.Solid },
-                ActiveColors: new[] { new LedColor(255, 255, 255), new LedColor(255, 255, 255), new LedColor(255, 255, 255) },
-                BrightnessPercent: 100,
-                RainbowStepMs: 20,
-                BreathingMinPercent: 20,
-                BreathingStepMs: 20);
+                Leds: new[]
+                {
+                    new LedPerKey(PassiveLedMode.Rainbow, new LedColor(255, 0, 0), ActiveLedMode.Solid, new LedColor(255, 255, 255), new LedTiming()),
+                    new LedPerKey(PassiveLedMode.Rainbow, new LedColor(255, 255, 0), ActiveLedMode.Solid, new LedColor(255, 255, 255), new LedTiming()),
+                    new LedPerKey(PassiveLedMode.Rainbow, new LedColor(0, 255, 0), ActiveLedMode.Solid, new LedColor(255, 255, 255), new LedTiming())
+                },
+                BrightnessPercent: 100);
 
             var configuration = Builder.FromLayout(layout, bindings, debugMode: false, ledConfig: ledConfig);
 

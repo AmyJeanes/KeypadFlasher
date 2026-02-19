@@ -40,11 +40,7 @@ namespace Keypad.Flasher.Server.Controllers
                     DebugMode: true,
                     NeoPixelPin: -1,
                     NeoPixelReversed: false,
-                    LedConfig: new LedConfiguration(
-                        PassiveModes: Array.Empty<PassiveLedMode>(),
-                        PassiveColors: Array.Empty<LedColor>(),
-                        ActiveModes: Array.Empty<ActiveLedMode>(),
-                        ActiveColors: Array.Empty<LedColor>()),
+                    LedConfig: new LedConfiguration(Leds: Array.Empty<LedPerKey>()),
                     DebugOptions: debugOptions);
 
                 var debugResult = _firmwareBuilder.BuildFirmware(debugOnlyConfiguration);

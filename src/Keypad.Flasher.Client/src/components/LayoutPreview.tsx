@@ -46,12 +46,7 @@ export function LayoutPreview({ layout, layoutRows, buttonBindings, encoderBindi
   useEffect(() => {
     // Bump to remount animated tiles so rainbow/breathing stay in sync when timing changes.
     setAnimRevision((rev) => rev + 1);
-  }, [
-    ledConfig?.rainbowStepMs,
-    ledConfig?.breathingStepMs,
-    ledConfig?.breathingMinPercent,
-    ledConfig?.passiveModes,
-  ]);
+  }, [ledConfig]);
 
   useEffect(() => {
     const el = gridRef.current;
@@ -319,11 +314,12 @@ export function LayoutPreview({ layout, layoutRows, buttonBindings, encoderBindi
                             const binding = button ? describeBinding(buttonBindings.get(button.id)) : "Unassigned";
                             buttonCursor += 1;
                             const ledIndex = button ? button.ledIndex : -1;
-                            const hasLed = !!ledConfig && ledIndex >= 0 && ledIndex < ledConfig.passiveColors.length;
-                            const passive = hasLed && ledConfig ? ledConfig.passiveModes[ledIndex] : undefined;
-                            const passiveColor = hasLed && ledConfig ? ledConfig.passiveColors[ledIndex] : undefined;
-                            const activeMode = hasLed && ledConfig ? ledConfig.activeModes[ledIndex] : undefined;
-                            const activeColor = hasLed && ledConfig ? ledConfig.activeColors[ledIndex] : undefined;
+                            const hasLed = !!ledConfig && ledIndex >= 0 && ledIndex < ledConfig.leds.length;
+                            const led = hasLed && ledConfig ? ledConfig.leds[ledIndex] : null;
+                            const passive = led?.passiveMode;
+                            const passiveColor = led?.passiveColor;
+                            const activeMode = led?.activeMode;
+                            const activeColor = led?.activeColor;
                             const className = "button-tile clickable";
                             return (
                               <div
@@ -338,9 +334,9 @@ export function LayoutPreview({ layout, layoutRows, buttonBindings, encoderBindi
                                       passiveColor={passiveColor}
                                       activeMode={activeMode}
                                       activeColor={activeColor}
-                                      rainbowStepMs={ledConfig?.rainbowStepMs}
-                                      breathingMinPercent={ledConfig?.breathingMinPercent}
-                                      breathingStepMs={ledConfig?.breathingStepMs}
+                                      rainbowStepMs={led?.rainbowStepMs}
+                                      breathingMinPercent={led?.breathingMinPercent}
+                                      breathingStepMs={led?.breathingStepMs}
                                       ledIndex={ledIndex}
                                       size="md"
                                       interactive={false}

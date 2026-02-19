@@ -497,13 +497,11 @@ namespace Keypad.Flasher.Server.Tests
             if (count <= 0)
             {
                 return new LedConfiguration(
-                    PassiveModes: Array.Empty<PassiveLedMode>(),
-                    PassiveColors: Array.Empty<LedColor>(),
-                    ActiveModes: Array.Empty<ActiveLedMode>(),
-                    ActiveColors: Array.Empty<LedColor>());
+                    Leds: Array.Empty<LedPerKey>(),
+                    BrightnessPercent: 0);
             }
 
-            var passiveColors = new LedColor[count];
+            var leds = new LedPerKey[count];
             var baseColors = new[]
             {
                 new LedColor(255, 0, 0),
@@ -513,18 +511,17 @@ namespace Keypad.Flasher.Server.Tests
 
             for (var i = 0; i < count; i++)
             {
-                passiveColors[i] = baseColors[i % baseColors.Length];
+                leds[i] = new LedPerKey(
+                    PassiveMode: PassiveLedMode.Rainbow,
+                    PassiveColor: baseColors[i % baseColors.Length],
+                    ActiveMode: ActiveLedMode.Solid,
+                    ActiveColor: new LedColor(255, 255, 255),
+                    Timing: new LedTiming());
             }
 
-            var activeModes = Enumerable.Repeat(ActiveLedMode.Solid, count).ToArray();
-            var activeColors = Enumerable.Repeat(new LedColor(255, 255, 255), count).ToArray();
-
-            var passiveModes = Enumerable.Repeat(PassiveLedMode.Rainbow, count).ToArray();
             return new LedConfiguration(
-                PassiveModes: passiveModes,
-                PassiveColors: passiveColors,
-                ActiveModes: activeModes,
-                ActiveColors: activeColors);
+                Leds: leds,
+                BrightnessPercent: 100);
         }
 
         private static string ReadExpected(string fileName)

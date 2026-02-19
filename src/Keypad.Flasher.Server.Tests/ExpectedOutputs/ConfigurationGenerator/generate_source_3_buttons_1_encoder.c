@@ -221,14 +221,29 @@ static const led_rgb_t led_active_colors[] = {
     { .r = 255, .g = 255, .b = 255 },
     { .r = 255, .g = 255, .b = 255 }
 };
+static const uint8_t led_rainbow_step_ms[] = {
+    20,
+    20,
+    20
+};
+static const uint8_t led_breathing_min_percent[] = {
+    20,
+    20,
+    20
+};
+static const uint8_t led_breathing_step_ms[] = {
+    20,
+    20,
+    20
+};
 const led_configuration_t led_configuration = {
+    .count = 3,
+    .brightness_percent = 100,
+    .rainbow_step_ms = led_rainbow_step_ms,
+    .breathing_min_percent = led_breathing_min_percent,
+    .breathing_step_ms = led_breathing_step_ms,
     .passive_modes = led_passive_modes,
     .passive_colors = led_passive_colors,
     .active_modes = led_active_modes,
-    .active_colors = led_active_colors,
-    .count = 3,
-    .brightness_percent = 100,
-    .rainbow_step_ms = 20,
-    .breathing_min_percent = 20,
-    .breathing_step_ms = 20
+    .active_colors = led_active_colors
 };

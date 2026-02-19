@@ -16,9 +16,9 @@ const MUTED_ALPHA_SCALE = 0.7; // raise/lower to change how muted previews look
 type PassiveLightingStyleInput = {
   passiveMode: PassiveLedMode;
   passiveColor: LedColor;
-  rainbowStepMs?: number;
-  breathingMinPercent?: number;
-  breathingStepMs?: number;
+  rainbowStepMs?: number | number[];
+  breathingMinPercent?: number | number[];
+  breathingStepMs?: number | number[];
   ledIndex?: number;
   muted?: boolean;
 };
@@ -45,8 +45,19 @@ export const getPassiveLightingStyle = (input: PassiveLightingStyleInput): { cla
     muted = true,
   } = input;
 
+  const resolvePerLed = (value: number | number[] | undefined, fallback: number): number => {
+    if (Array.isArray(value)) {
+      const idx = Math.max(0, Math.min(value.length - 1, ledIndex));
+      return value[idx] ?? fallback;
+    }
+    if (typeof value === "number") {
+      return value;
+    }
+    return fallback;
+  };
+
   if (passiveMode === "Rainbow") {
-    const step = rainbowStepMs ?? DEFAULT_RAINBOW_STEP_MS;
+    const step = resolvePerLed(rainbowStepMs, DEFAULT_RAINBOW_STEP_MS);
     const durationSec = Math.max(0.2, (192 * step) / 1000); // firmware: 192 hue steps, one per step_ms
     const hueOffsetSteps = (ledIndex * 8) % 192; // firmware: per-LED hue offset = led * 8 (mod 192)
     const delaySec = -(hueOffsetSteps * step) / 1000; // align phase offset in time
@@ -61,9 +72,9 @@ export const getPassiveLightingStyle = (input: PassiveLightingStyleInput): { cla
 
   if (passiveMode === "Static" || passiveMode === "Breathing") {
     const color = passiveColor;
-    const minPercentRaw = breathingMinPercent ?? DEFAULT_BREATHING_MIN_PERCENT;
+    const minPercentRaw = resolvePerLed(breathingMinPercent, DEFAULT_BREATHING_MIN_PERCENT);
     const minPercent = Math.min(MAX_BREATHING_MIN_PERCENT, minPercentRaw);
-    const step = breathingStepMs ?? DEFAULT_BREATHING_STEP_MS;
+    const step = resolvePerLed(breathingStepMs, DEFAULT_BREATHING_STEP_MS);
     const durationSec = Math.max(0.2, ((100 - minPercent) * 2 * step) / 1000); // firmware: +/-1% per step_ms
     const alphaScale = muted ? MUTED_ALPHA_SCALE : 1;
     const primaryAlpha = BASE_PRIMARY_ALPHA * alphaScale;

@@ -853,7 +853,7 @@ code {
 }
 
 .space-y-2 > * + * {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .status-banner {

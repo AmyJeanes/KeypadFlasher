@@ -31,15 +31,15 @@ typedef enum
 
 typedef struct
 {
+    uint8_t count;
+    uint8_t brightness_percent;
+    const uint8_t *rainbow_step_ms;
+    const uint8_t *breathing_min_percent;
+    const uint8_t *breathing_step_ms;
     const led_passive_mode_t *passive_modes;
     const led_rgb_t *passive_colors;
     const led_active_mode_t *active_modes;
     const led_rgb_t *active_colors;
-    uint8_t count;
-    uint8_t brightness_percent;
-    uint8_t rainbow_step_ms;
-    uint8_t breathing_min_percent;
-    uint8_t breathing_step_ms;
 } led_configuration_t;
 
 extern const led_configuration_t led_configuration;
