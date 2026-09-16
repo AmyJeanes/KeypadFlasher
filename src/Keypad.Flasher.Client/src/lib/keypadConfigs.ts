@@ -100,7 +100,8 @@ export const DEVICE_PROFILES: KnownDeviceProfile[] = [
     name: "3 Keys 1 Knob",
     bootloaderIds: [
       "126-80-44-189",
-      "229-68-44-189"
+      "229-68-44-189",
+      "219-214-70-191"
     ],
     layout: {
       buttons: [
