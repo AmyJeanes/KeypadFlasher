@@ -11,6 +11,12 @@
   },
   "packageRules": [
     {
+      // CI runs OpenTofu, which installs providers from the OpenTofu registry; it mirrors new
+      // releases hours after registry.terraform.io, so look versions up there instead
+      "matchDatasources": ["terraform-provider"],
+      "registryUrls": ["https://registry.opentofu.org"]
+    },
+    {
       // Always want to use latest version
       "matchDepNames": [
         "ghcr.io/amyjeanes/keypad/keypad-flasher"
